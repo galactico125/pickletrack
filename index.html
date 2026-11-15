@@ -1,0 +1,1525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PickleTrack — Pickleball Tracker & Ratings</title>
+<meta name="description" content="Log pickleball matches, track DUPR-style ratings, rivalries and badges. Works offline.">
+<meta name="theme-color" content="#16a34a">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ccircle cx='50' cy='50' r='46' fill='%2316a34a'/%3E%3Cg fill='%23fff'%3E%3Ccircle cx='34' cy='34' r='6'/%3E%3Ccircle cx='62' cy='30' r='6'/%3E%3Ccircle cx='50' cy='52' r='6'/%3E%3Ccircle cx='30' cy='64' r='6'/%3E%3Ccircle cx='68' cy='66' r='6'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="PickleTrack">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ==========================================================================
+   PickleTrack — single-file app. Sections: tokens, layout, components, tabs.
+   ========================================================================== */
+
+/* ---------- Design tokens (light) ---------- */
+:root{
+  --bg:#f8fafc; --surface:#ffffff; --field:#f8fafc; --raised:#f1f5f9;
+  --ink:#0f172a; --ink-2:#475569; --ink-3:#64748b; --line:#e2e8f0;
+  --green:#16a34a; --green-ink:#15803d; --green-soft:#dcfce7;
+  --blue:#2563eb;  --blue-ink:#1d4ed8;  --blue-soft:#dbeafe;
+  --gold:#eab308;  --gold-ink:#854d0e;  --gold-soft:#fef9c3;
+  --rose:#e11d48;  --rose-ink:#be123c;  --rose-soft:#ffe4e6;
+  --shadow:0 1px 2px rgba(15,23,42,.06),0 4px 16px rgba(15,23,42,.06);
+  --radius:14px;
+  --head:"Bricolage Grotesque","Public Sans",system-ui,sans-serif;
+  --body:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+/* ---------- Design tokens (dark) ---------- */
+[data-theme="dark"]{
+  --bg:#0b1220; --surface:#0f172a; --field:#1e293b; --raised:#1e293b;
+  --ink:#f1f5f9; --ink-2:#cbd5e1; --ink-3:#94a3b8; --line:#283548;
+  --green:#22c55e; --green-ink:#4ade80; --green-soft:#0f3a23;
+  --blue:#3b82f6;  --blue-ink:#93c5fd;  --blue-soft:#172f5c;
+  --gold:#eab308;  --gold-ink:#fde047;  --gold-soft:#3f3208;
+  --rose:#f43f5e;  --rose-ink:#fda4af;  --rose-soft:#4a1424;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 6px 20px rgba(0,0,0,.3);
+}
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 15px/1.5 var(--body);
+  -webkit-font-smoothing:antialiased;padding-bottom:env(safe-area-inset-bottom)}
+h1,h2,h3{font-family:var(--head);margin:0;line-height:1.15;letter-spacing:-.01em}
+h2{font-size:1.25rem} h3{font-size:1.02rem}
+p{margin:0}
+.num{font-variant-numeric:tabular-nums}
+.muted{color:var(--ink-3)} .small{font-size:.82rem}
+.pos{color:var(--green-ink)} .neg{color:var(--rose-ink)}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+
+/* ---------- Header + nav ---------- */
+header.top{position:sticky;top:0;z-index:30;background:var(--surface);border-bottom:1px solid var(--line)}
+.bar{display:flex;align-items:center;gap:10px;padding:8px 14px;max-width:1080px;margin:0 auto}
+.brand{display:flex;align-items:center;gap:8px;font:800 1.2rem var(--head);margin-right:auto;white-space:nowrap}
+.brand svg{width:28px;height:28px;flex:none}
+.bar label{display:flex;flex-direction:column;font-size:.66rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);min-width:0}
+.bar select{min-height:38px;max-width:150px;padding:4px 8px}
+nav.tabs{display:flex;gap:4px;padding:0 10px;max-width:1080px;margin:0 auto;overflow-x:auto;scrollbar-width:none}
+nav.tabs::-webkit-scrollbar{display:none}
+nav.tabs button{flex:none;min-height:44px;padding:0 13px;border:0;background:none;cursor:pointer;font-weight:600;
+  color:var(--ink-3);border-bottom:3px solid transparent;white-space:nowrap}
+nav.tabs button[aria-selected="true"]{color:var(--green-ink);border-bottom-color:var(--green)}
+
+main{max-width:1080px;margin:0 auto;padding:16px 14px 90px}
+.stack{display:grid;gap:16px;grid-template-columns:minmax(0,1fr)}
+.card{min-width:0}
+
+/* ---------- Generic components ---------- */
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow)}
+.card > h2,.card > h3{margin-bottom:10px}
+.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.spread{justify-content:space-between}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;padding:0 16px;border-radius:11px;
+  border:1px solid var(--line);background:var(--surface);font-weight:600;cursor:pointer;text-decoration:none}
+.btn:hover{background:var(--raised)}
+.btn.primary{background:var(--green);border-color:var(--green);color:#fff}
+[data-theme="dark"] .btn.primary{color:#052e16}
+.btn.primary:hover{filter:brightness(1.07)}
+.btn.blue{background:var(--blue);border-color:var(--blue);color:#fff}
+.btn.danger{color:var(--rose-ink);border-color:var(--rose)}
+.btn.sm{min-height:44px;padding:0 12px;font-size:.88rem}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.block{width:100%}
+input[type=text],input[type=tel],input[type=url],input[type=password],input[type=number],input[type=datetime-local],input[type=search],select{
+  min-height:44px;padding:8px 12px;border:1px solid var(--line);border-radius:11px;background:var(--field);width:100%}
+.fld{display:grid;gap:4px;font-size:.8rem;font-weight:600;color:var(--ink-2)}
+.grid2{display:grid;gap:12px;grid-template-columns:1fr}
+@media(min-width:640px){.grid2{grid-template-columns:1fr 1fr}}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:999px;font-size:.74rem;font-weight:700;white-space:nowrap}
+.chip.ok{background:var(--green-soft);color:var(--green-ink)}
+.chip.wait{background:var(--gold-soft);color:var(--gold-ink)}
+.chip.bad{background:var(--rose-soft);color:var(--rose-ink)}
+.chip.info{background:var(--blue-soft);color:var(--blue-ink)}
+.chip.plain{background:var(--raised);color:var(--ink-2)}
+.pills{display:flex;gap:8px;flex-wrap:wrap}
+.pill{min-height:44px;padding:0 14px;border-radius:999px;border:1px solid var(--line);background:var(--surface);font-weight:600;cursor:pointer;color:var(--ink-2)}
+.pill[aria-pressed="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.avatar{display:inline-grid;place-items:center;width:34px;height:34px;border-radius:50%;color:#fff;font:700 .8rem var(--head);flex:none}
+.avatar.lg{width:60px;height:60px;font-size:1.3rem}
+.check{display:flex;align-items:center;gap:10px;min-height:44px;cursor:pointer;font-weight:500}
+.check input{width:20px;height:20px;accent-color:var(--green);flex:none}
+
+/* ---------- Action-required banner ---------- */
+#banner{max-width:1080px;margin:0 auto;padding:0 14px}
+.alert{margin-top:14px;border:1px solid var(--gold);background:var(--gold-soft);border-radius:var(--radius);padding:14px}
+.alert h3{color:var(--gold-ink);margin-bottom:8px}
+.alert .item{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:10px 0;border-top:1px solid color-mix(in srgb,var(--gold) 35%,transparent)}
+
+/* ---------- Leaderboard ---------- */
+.hero{background:linear-gradient(135deg,#15803d,#166534 55%,#1d4ed8);color:#fff;border-radius:var(--radius);padding:20px;box-shadow:var(--shadow)}
+.hero h1{font-size:1.5rem;margin-bottom:14px}
+.hero-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+@media(min-width:720px){.hero-grid{grid-template-columns:repeat(4,1fr)}}
+.stat{background:rgba(255,255,255,.13);border-radius:12px;padding:12px}
+.stat b{display:block;font:800 1.7rem/1.1 var(--head);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.stat span{font-size:.74rem;font-weight:600;letter-spacing:.05em;text-transform:uppercase;opacity:.9}
+.stat b.name{font-size:1.15rem}
+.table-wrap{overflow-x:auto;margin:0 -16px;padding:0 16px}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+th{font-size:.7rem;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);text-align:left;padding:8px 10px;white-space:nowrap;border-bottom:1px solid var(--line)}
+td{padding:10px;border-bottom:1px solid var(--line);white-space:nowrap;vertical-align:middle}
+tr:last-child td{border-bottom:0}
+td.r,th.r{text-align:right}
+.rank{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:50%;font:800 .85rem var(--head);background:var(--raised);color:var(--ink-2)}
+.rank.g1{background:#eab308;color:#422006}.rank.g2{background:#cbd5e1;color:#1e293b}.rank.g3{background:#d97706;color:#fff}
+.who{display:flex;align-items:center;gap:10px;background:none;border:0;padding:0;cursor:pointer;min-height:44px;text-align:left;font-weight:600}
+.rating{font:700 1.02rem var(--head)}
+.trend{font-size:.76rem;font-weight:700;margin-left:4px}
+
+/* ---------- Log match form ---------- */
+.seg{display:grid;grid-template-columns:1fr 1fr;background:var(--raised);border-radius:12px;padding:4px;gap:4px}
+.seg button{min-height:44px;border:0;border-radius:9px;background:none;font-weight:700;cursor:pointer;color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+.teams{display:grid;gap:10px;grid-template-columns:1fr;align-items:stretch}
+@media(min-width:640px){.teams{grid-template-columns:1fr auto 1fr}}
+.team{border:1px solid var(--line);border-top:4px solid var(--green);border-radius:12px;padding:12px;display:grid;gap:8px;background:var(--field)}
+.team.t2{border-top-color:var(--blue)}
+.team h3{font-size:.8rem;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2)}
+.vs{align-self:center;justify-self:center;font:800 .9rem var(--head);color:var(--ink-3)}
+.slot-wrap{position:relative}
+.slot{display:flex;align-items:center;gap:10px;width:100%;min-height:52px;padding:8px 12px;border:1px dashed var(--ink-3);border-radius:11px;background:var(--surface);cursor:pointer;font-weight:600;text-align:left}
+.slot.filled{border-style:solid;border-color:var(--line)}
+.slot .caret{margin-left:auto;color:var(--ink-3)}
+.pop{position:absolute;z-index:20;left:0;right:0;top:calc(100% + 4px);background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,.25);padding:8px;display:grid;gap:6px}
+.pop-list{max-height:230px;overflow:auto;display:grid;gap:2px}
+.opt{display:flex;align-items:center;gap:10px;min-height:44px;padding:4px 8px;border:0;border-radius:9px;background:none;cursor:pointer;text-align:left;width:100%;font-weight:500}
+.opt:hover{background:var(--raised)}
+.opt:disabled{opacity:.4;cursor:not-allowed}
+.opt .num{margin-left:auto;color:var(--ink-3);font-size:.82rem}
+.game{display:grid;grid-template-columns:auto 1fr auto 1fr;gap:8px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}
+.game:first-of-type{border-top:0}
+.game .gl{font:700 .8rem var(--head);color:var(--ink-3);width:22px}
+.stepper{display:grid;grid-template-columns:44px minmax(0,1fr) 44px;gap:4px}
+.stepper button{min-height:48px;border:1px solid var(--line);border-radius:10px;background:var(--surface);font-size:1.3rem;font-weight:700;cursor:pointer;line-height:1}
+.stepper input{min-height:48px;text-align:center;font:800 1.35rem var(--head);padding:4px;font-variant-numeric:tabular-nums;-moz-appearance:textfield}
+.stepper input::-webkit-outer-spin-button,.stepper input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.stepper.t1 input{border-color:var(--green)} .stepper.t2 input{border-color:var(--blue)}
+.game .dash{color:var(--ink-3);font-weight:700}
+.game .gx{grid-column:1/-1;display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;font-size:.82rem}
+.game .gx .check{min-height:44px;font-size:.82rem}
+.winner{border-radius:12px;padding:12px 14px;font-weight:700;background:var(--raised);color:var(--ink-2)}
+.winner.ok{background:var(--green-soft);color:var(--green-ink)}
+.winner.t2.ok{background:var(--blue-soft);color:var(--blue-ink)}
+.winner.err{background:var(--rose-soft);color:var(--rose-ink)}
+
+/* ---------- Match cards ---------- */
+.mlist{display:grid;gap:10px}
+.match{border:1px solid var(--line);border-left:5px solid var(--line);border-radius:12px;padding:12px;background:var(--surface);display:grid;gap:6px}
+.match.win{border-left-color:var(--green)} .match.loss{border-left-color:var(--rose)}
+.match .line{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+.match .tn{min-width:0;overflow-wrap:anywhere}
+.match .tn.w{font-weight:700}
+.match .sc{font:700 1.02rem var(--head);font-variant-numeric:tabular-nums;white-space:nowrap}
+.match .meta{display:flex;gap:6px 10px;flex-wrap:wrap;align-items:center;font-size:.8rem;color:var(--ink-3)}
+.deltas{display:flex;gap:4px 12px;flex-wrap:wrap;font-size:.8rem;font-variant-numeric:tabular-nums}
+
+/* ---------- Profile ---------- */
+.phead{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.phead .big{font:800 2rem/1 var(--head);font-variant-numeric:tabular-nums}
+.kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+@media(min-width:720px){.kpis{grid-template-columns:repeat(4,1fr)}}
+.kpi{background:var(--field);border:1px solid var(--line);border-radius:12px;padding:12px}
+.kpi b{display:block;font:800 1.45rem/1.15 var(--head);font-variant-numeric:tabular-nums}
+.kpi span{font-size:.72rem;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-3)}
+.ring{display:flex;align-items:center;gap:12px}
+.chart{position:relative;height:170px;margin:14px 12px 6px}
+.chart svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.dot{position:absolute;width:28px;height:28px;margin:-14px 0 0 -14px;border:0;background:none;padding:0;cursor:pointer;border-radius:50%}
+.dot::after{content:"";position:absolute;inset:9px;border-radius:50%;background:var(--green);box-shadow:0 0 0 2px var(--surface)}
+.dot:hover::after,.dot:focus::after{inset:7px}
+.tip{position:absolute;z-index:5;transform:translate(-50%,calc(-100% - 12px));background:var(--ink);color:var(--surface);padding:7px 10px;border-radius:9px;font-size:.76rem;white-space:pre;pointer-events:none;font-variant-numeric:tabular-nums;line-height:1.35}
+.tip.l{transform:translate(-14px,calc(-100% - 12px))} .tip.rt{transform:translate(calc(-100% + 14px),calc(-100% - 12px))}
+.tip.below{transform:translate(-50%,14px)} .tip.below.l{transform:translate(-14px,14px)} .tip.below.rt{transform:translate(calc(-100% + 14px),14px)}
+.enc{display:inline-flex;gap:4px}
+.cols{display:grid;gap:16px;grid-template-columns:minmax(0,1fr)}
+@media(min-width:900px){.cols{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
+
+/* ---------- Badges ---------- */
+.badges{display:grid;gap:12px;grid-template-columns:repeat(auto-fill,minmax(155px,1fr))}
+.badge{border:2px dashed var(--line);border-radius:var(--radius);padding:16px 12px;text-align:center;display:grid;gap:4px;justify-items:center;color:var(--ink-3)}
+.badge .ico{font-size:2.2rem;line-height:1;filter:grayscale(1);opacity:.45}
+.badge h3{font-size:.98rem;color:var(--ink-2)}
+.badge p{font-size:.78rem}
+.badge.on{border:2px solid transparent;color:#fff;box-shadow:var(--shadow)}
+.badge.on .ico{filter:none;opacity:1}
+.badge.on h3{color:#fff}
+.badge.on .when{background:rgba(255,255,255,.22);border-radius:999px;padding:2px 9px;font-size:.72rem;font-weight:700;margin-top:4px}
+.badge.c-gold{background:linear-gradient(140deg,#a16207,#713f12)}
+.badge.c-green{background:linear-gradient(140deg,#15803d,#14532d)}
+.badge.c-blue{background:linear-gradient(140deg,#2563eb,#1e3a8a)}
+.badge.c-rose{background:linear-gradient(140deg,#e11d48,#881337)}
+.badge.c-violet{background:linear-gradient(140deg,#7c3aed,#4c1d95)}
+
+/* ---------- Data tab ---------- */
+details{border:1px solid var(--line);border-radius:12px;background:var(--field)}
+summary{min-height:44px;display:flex;align-items:center;padding:0 14px;cursor:pointer;font-weight:600}
+pre{margin:0;padding:14px;overflow:auto;max-height:340px;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;border-top:1px solid var(--line)}
+ol.steps{margin:0;padding-left:20px;display:grid;gap:4px;color:var(--ink-2);font-size:.9rem}
+
+/* ---------- Modal, toast, confetti ---------- */
+#modal{position:fixed;inset:0;z-index:60;background:rgba(2,6,23,.6);display:none;align-items:flex-end;justify-content:center;padding:14px}
+#modal.open{display:flex}
+@media(min-width:640px){#modal{align-items:center}}
+#modalCard{background:var(--surface);border-radius:18px;padding:20px;width:100%;max-width:440px;display:grid;gap:14px;max-height:90vh;overflow:auto}
+#modalCard .acts{display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap}
+#toast{position:fixed;left:50%;bottom:calc(22px + env(safe-area-inset-bottom));transform:translate(-50%,30px);opacity:0;z-index:80;
+  background:var(--ink);color:var(--surface);padding:11px 20px;border-radius:999px;font-weight:600;font-size:.9rem;
+  max-width:calc(100vw - 28px);text-align:center;transition:.25s;pointer-events:none;box-shadow:0 8px 24px rgba(0,0,0,.3)}
+#toast.show{transform:translate(-50%,0);opacity:1}
+#confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:70}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="bar">
+    <div class="brand">
+      <svg viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="46" fill="#16a34a"/><g fill="#fff"><circle cx="34" cy="34" r="6"/><circle cx="62" cy="30" r="6"/><circle cx="50" cy="52" r="6"/><circle cx="30" cy="64" r="6"/><circle cx="68" cy="66" r="6"/></g></svg>
+      PickleTrack
+    </div>
+    <label>Playing as
+      <select id="activeUser" aria-label="Current active player"></select>
+    </label>
+    <button class="btn sm" id="themeBtn" data-act="theme" title="Switch theme">Auto</button>
+  </div>
+  <nav class="tabs" role="tablist" aria-label="Sections">
+    <button role="tab" data-act="tab" data-tab="board">Leaderboard</button>
+    <button role="tab" data-act="tab" data-tab="log">Log Match</button>
+    <button role="tab" data-act="tab" data-tab="profile">Profile</button>
+    <button role="tab" data-act="tab" data-tab="badges">Badges</button>
+    <button role="tab" data-act="tab" data-tab="data">Data &amp; Sync</button>
+  </nav>
+</header>
+
+<div id="banner" aria-live="polite"></div>
+<main id="view"></main>
+
+<div id="modal" role="dialog" aria-modal="true"><div id="modalCard"></div></div>
+<div id="toast" role="status" aria-live="polite"></div>
+<canvas id="confetti" aria-hidden="true"></canvas>
+<input type="file" id="importFile" accept="application/json,.json" hidden>
+
+<script>
+'use strict';
+/* ==========================================================================
+   PickleTrack
+   --------------------------------------------------------------------------
+   1. Constants & helpers        6. Views (5 tabs)
+   2. State: load / seed / save  7. Match logging + peer confirmation
+   3. Rating engine (DUPR-style) 8. Data portability + Google Sheets sync
+   4. Derived stats & badges     9. Modal / toast / confetti / theme
+   5. Shared render pieces      10. Event wiring & boot
+   ========================================================================== */
+
+/* ---------- 1. Constants & helpers ---------- */
+const KEY = 'pickletrack::state';
+const FORMATS = {
+  '1_to_11':         { label: '1 Game to 11 (Win by 2)',             target: 11, games: 1, weight: 1 },
+  '1_to_15':         { label: '1 Game to 15 (Win by 2)',             target: 15, games: 1, weight: 1 },
+  '1_to_21':         { label: '1 Game to 21 (Win by 2)',             target: 21, games: 1, weight: 1 },
+  '1_to_11_no_wb2':  { label: '1 Game to 11 (No win by 2 — first to 11)', target: 11, games: 1, weight: 1, winBy: 1 },
+  '1_to_15_no_wb2':  { label: '1 Game to 15 (No win by 2 — first to 15)', target: 15, games: 1, weight: 1, winBy: 1 },
+  '1_to_21_no_wb2':  { label: '1 Game to 21 (No win by 2 — first to 21)', target: 21, games: 1, weight: 1, winBy: 1 },
+  'best_of_3_to_11': { label: 'Best 2 of 3 (Games to 11, Win by 2)', target: 11, games: 3, weight: 1.25 },
+  'best_of_3_to_15': { label: 'Best 2 of 3 (Games to 15, Win by 2)', target: 15, games: 3, weight: 1.25 }
+};
+const SEED_VENUES = ['PicklePro Club, Borivali West', 'St. Francis Turf', 'Green Field Arena', 'Maks Academy'];
+const AVATAR_COLORS = ['#15803d', '#2563eb', '#be123c', '#b45309', '#7c3aed', '#0e7490', '#be185d', '#4338ca'];
+const RATING_MIN = 2, RATING_MAX = 8, SPREAD = 1.5;
+
+const $ = (s, root = document) => root.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const uid = p => p + (crypto.randomUUID ? crypto.randomUUID().slice(0, 8) : Math.random().toString(36).slice(2, 10)) + Date.now().toString(36).slice(-3);
+const fmtR = r => Number(r).toFixed(3);
+const sign = (n, d = 3) => (n > 0 ? '+' : n < 0 ? '−' : '±') + Math.abs(n).toFixed(d);
+const signInt = n => (n > 0 ? '+' : n < 0 ? '−' : '') + Math.abs(n);
+const fmtDate = iso => { const d = new Date(iso); return isNaN(d) ? '—' : d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }); };
+const fmtDateTime = iso => { const d = new Date(iso); return isNaN(d) ? '—' : d.toLocaleString(undefined, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }); };
+const localInput = (d = new Date()) => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+const todayStamp = () => localInput().slice(0, 10);
+const initials = n => String(n || '?').trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+
+/* ---------- 2. State ---------- */
+let state;
+let tab = 'board';
+let viewPid = null;                       // player shown on Profile / Badges tabs
+let lbMode = 'all', lbRegulars = false;   // leaderboard filters
+let form = null;                          // in-progress Log Match form
+let openSlot = null;                      // which player picker is open, e.g. "1-0"
+
+const P = id => state.players.find(p => p.id === id);
+const M = id => state.matches.find(m => m.id === id);
+const pname = id => P(id)?.name ?? 'Unknown player';
+const sortedMatches = (desc = false) => [...state.matches].sort((a, b) => (desc ? -1 : 1) * (new Date(a.date) - new Date(b.date)));
+
+/** A brand-new install: no players or matches, just the saved venues. */
+function emptyState() {
+  return {
+    players: [], matches: [], venues: [...SEED_VENUES], activeUserId: null,
+    meta: { theme: 'auto', commissioner: false, autoSync: true, syncUrl: '', syncSecret: '', lastSync: null, remoteUpdatedAt: '', lastBackup: null, demoCleared: true, updatedAt: new Date().toISOString() }
+  };
+}
+
+/** One-time clean-up for installs that still hold the old sample players (ids p1-p6) and sample matches (m1-m3). */
+function clearOldDemo(s) {
+  if (s.meta.demoCleared) return s;
+  s.matches = s.matches.filter(m => !/^m[1-3]$/.test(m.id));
+  const used = new Set(s.matches.flatMap(m => [...m.team1, ...m.team2, m.loggedBy]));
+  s.players = s.players.filter(p => !/^p[1-6]$/.test(p.id) || used.has(p.id));
+  if (!s.players.some(p => p.id === s.activeUserId)) s.activeUserId = s.players[0]?.id ?? null;
+  s.meta.demoCleared = true;
+  return s;
+}
+
+/** Fill in anything missing so older backups / hand-edited files cannot crash the UI. */
+function normalize(s) {
+  s = s && typeof s === 'object' ? s : {};
+  s.players = (Array.isArray(s.players) ? s.players : []).filter(p => p && p.id && p.name).map((p, i) => ({
+    id: String(p.id), name: String(p.name), isGuest: !!p.isGuest, phone: String(p.phone || ''),
+    avatarColor: /^#[0-9a-f]{6}$/i.test(p.avatarColor) ? p.avatarColor : AVATAR_COLORS[i % AVATAR_COLORS.length],
+    initialRating: Number.isFinite(+p.initialRating) ? +p.initialRating : 3,
+    ratingDoubles: 3, ratingSingles: 3, historyDoubles: [], historySingles: [],
+    createdDate: p.createdDate || new Date().toISOString()
+  }));
+  const ids = new Set(s.players.map(p => p.id));
+  const arr = a => (Array.isArray(a) ? a.map(String) : []);
+  s.matches = (Array.isArray(s.matches) ? s.matches : []).filter(m => m && m.id && FORMATS[m.format] && Array.isArray(m.games) && m.games.length &&
+      arr(m.team1).length && arr(m.team2).length && [...arr(m.team1), ...arr(m.team2)].every(id => ids.has(id)))
+    .map(m => ({
+      id: String(m.id), date: m.date || new Date().toISOString(), venue: String(m.venue || ''),
+      type: m.type === 'singles' ? 'singles' : 'doubles', team1: arr(m.team1), team2: arr(m.team2), format: m.format,
+      games: m.games.map(g => ({ s1: Math.max(0, parseInt(g.s1) || 0), s2: Math.max(0, parseInt(g.s2) || 0), ...(g.cb ? { cb: true } : {}) })),
+      winnerTeam: m.winnerTeam === 2 ? 2 : 1, status: m.status === 'confirmed' ? 'confirmed' : 'pending',
+      loggedBy: String(m.loggedBy || ''), confirmedBy: arr(m.confirmedBy), disputedBy: arr(m.disputedBy), ratingDeltas: {}
+    }));
+  s.venues = Array.isArray(s.venues) ? [...new Set(s.venues.map(String).filter(Boolean))] : [...SEED_VENUES];
+  s.meta = { theme: 'auto', commissioner: false, autoSync: true, syncUrl: '', syncSecret: '', lastSync: null, remoteUpdatedAt: '', lastBackup: null,
+             updatedAt: new Date().toISOString(), ...(s.meta && typeof s.meta === 'object' ? s.meta : {}) };
+  if (!['auto', 'dark', 'light'].includes(s.meta.theme)) s.meta.theme = 'auto';
+  if (!ids.has(s.activeUserId)) s.activeUserId = s.players[0]?.id ?? null;
+  return s;
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (raw) return clearOldDemo(normalize(JSON.parse(raw)));
+  } catch (e) { console.warn('PickleTrack: could not read saved state, starting fresh', e); }
+  return emptyState();
+}
+
+/** Write to localStorage without marking the data as changed (used for sync bookkeeping). */
+function persist() {
+  try { localStorage.setItem(KEY, JSON.stringify(state)); }
+  catch (e) { toast('Could not save — browser storage is full or blocked'); }
+}
+/** Save a real data change: bumps updatedAt and queues an auto-sync. */
+function save() {
+  state.meta.updatedAt = new Date().toISOString();
+  persist();
+  scheduleSync();
+}
+
+/* ---------- 3. Rating engine (DUPR-style) ----------
+   Ratings are always rebuilt from scratch by replaying every confirmed match in
+   date order. That keeps them correct after late confirmations, deletions and imports.
+
+     Team rating   R_T = mean of the players' ratings (doubles) or the player's rating (singles)
+     Expected      E1  = 1 / (1 + 10^(-(R_T1 - R_T2) / 1.5))      share of points team 1 should win
+     Actual        S1  = points won by team 1 / all points played
+     Change        dR  = K x (S1 - E1) x FormatWeight             (+ for team 1, - for team 2)
+
+   K is each player's own volatility: 0.150 for their first 5 matches of that type,
+   0.080 for matches 6-15, 0.040 after. When all four players share a K the change is
+   exactly zero-sum; a provisional player simply moves further than an established one. */
+let derived = { pre: {} };   // per match: ratings going in, used for the Giant Slayer badge
+
+const kFactor = played => (played < 5 ? 0.15 : played < 15 ? 0.08 : 0.04);
+
+function recompute() {
+  derived = { pre: {} };
+  const played = {};
+  for (const p of state.players) {
+    p.ratingDoubles = p.ratingSingles = p.initialRating;
+    p.historyDoubles = []; p.historySingles = [];
+    played[p.id] = { Doubles: 0, Singles: 0 };
+  }
+  for (const m of sortedMatches()) {
+    m.ratingDeltas = {};
+    if (m.status !== 'confirmed') continue;
+    const key = m.type === 'singles' ? 'Singles' : 'Doubles';
+    const rOf = id => P(id)['rating' + key];
+    const avg = ids => ids.reduce((s, id) => s + rOf(id), 0) / ids.length;
+    const r1 = avg(m.team1), r2 = avg(m.team2);
+    const e1 = 1 / (1 + Math.pow(10, -(r1 - r2) / SPREAD));
+    const pts1 = m.games.reduce((s, g) => s + g.s1, 0), pts2 = m.games.reduce((s, g) => s + g.s2, 0);
+    const s1 = pts1 + pts2 ? pts1 / (pts1 + pts2) : 0.5;
+    const base = (s1 - e1) * FORMATS[m.format].weight;
+    derived.pre[m.id] = { sum1: r1 * m.team1.length, sum2: r2 * m.team2.length, e1 };
+    const apply = (id, dir) => {
+      const p = P(id), before = p['rating' + key];
+      const after = clamp(before + dir * kFactor(played[id][key]) * base, RATING_MIN, RATING_MAX);
+      p['rating' + key] = after;
+      m.ratingDeltas[id] = +(after - before).toFixed(4);
+      p['history' + key].push({ date: m.date, rating: +after.toFixed(4), matchId: m.id });
+      played[id][key]++;
+    };
+    m.team1.forEach(id => apply(id, 1));
+    m.team2.forEach(id => apply(id, -1));
+  }
+}
+
+/* ---------- 4. Derived stats & badges ---------- */
+const teamOf = (m, pid) => (m.team1.includes(pid) ? 1 : m.team2.includes(pid) ? 2 : 0);
+const pointsFor = (m, team) => m.games.reduce((s, g) => s + (team === 1 ? g.s1 : g.s2), 0);
+/** Score string from one team's point of view, e.g. "11–7, 9–11". */
+const scoreStr = (m, team = 1) => m.games.map(g => (team === 2 ? `${g.s2}–${g.s1}` : `${g.s1}–${g.s2}`)).join(', ');
+
+/** Win/loss/points/streak per player over confirmed matches. mode: all | doubles | singles */
+function computeStats(mode = 'all') {
+  const out = {};
+  for (const p of state.players) out[p.id] = { w: 0, l: 0, pf: 0, pa: 0, streak: 0, games: 0 };
+  for (const m of sortedMatches()) {
+    if (m.status !== 'confirmed' || (mode !== 'all' && m.type !== mode)) continue;
+    for (const id of [...m.team1, ...m.team2]) {
+      const s = out[id], t = teamOf(m, id), won = m.winnerTeam === t;
+      won ? s.w++ : s.l++;
+      s.pf += pointsFor(m, t); s.pa += pointsFor(m, 3 - t); s.games += m.games.length;
+      s.streak = won ? (s.streak > 0 ? s.streak + 1 : 1) : (s.streak < 0 ? s.streak - 1 : -1);
+    }
+  }
+  return out;
+}
+
+/** Rating change across the player's last five rated matches (null when unrated). */
+function trend(p, key) {
+  const h = p['history' + key];
+  if (!h.length) return null;
+  const prev = h.length > 5 ? h[h.length - 6].rating : p.initialRating;
+  return h[h.length - 1].rating - prev;
+}
+
+const BADGES = [
+  { id: 'bagel',    ico: '🥯', color: 'gold',   name: 'Golden Bagel',    desc: 'Win a game 11–0.' },
+  { id: 'comeback', ico: '👑', color: 'violet', name: 'Comeback King',   desc: 'Win a game after trailing by 5 or more points.' },
+  { id: 'overtime', ico: '⏱️', color: 'blue',   name: 'Overtime Victor', desc: 'Win a game that runs past the target score (e.g. 14–12).' },
+  { id: 'fire',     ico: '🔥', color: 'rose',   name: 'On Fire',         desc: 'Win 5 matches in a row.' },
+  { id: 'unstop',   ico: '⚡', color: 'gold',   name: 'Unstoppable',     desc: 'Win 10 matches in a row.' },
+  { id: 'century',  ico: '💯', color: 'green',  name: 'Century Club',    desc: 'Play 100 total games.' },
+  { id: 'duo',      ico: '🤝', color: 'blue',   name: 'Iron Duo',        desc: 'Play 10 matches with the same partner.' },
+  { id: 'giant',    ico: '🗡️', color: 'rose',   name: 'Giant Slayer',    desc: 'Beat opponents whose combined rating is 0.800+ above yours.' }
+];
+
+/** Replays confirmed matches and returns { earned: {pid: {badgeId: date}}, progress: {pid: {...}} }. */
+function computeBadges() {
+  const earned = {}, progress = {};
+  for (const p of state.players) { earned[p.id] = {}; progress[p.id] = { streak: 0, best: 0, games: 0, partners: {}, topPartner: 0 }; }
+  const give = (pid, badge, date) => { if (!earned[pid][badge]) earned[pid][badge] = date; };
+  for (const m of sortedMatches()) {
+    if (m.status !== 'confirmed') continue;
+    const target = FORMATS[m.format].target, pre = derived.pre[m.id];
+    for (const team of [1, 2]) {
+      const ids = m['team' + team], won = m.winnerTeam === team;
+      for (const g of m.games) {
+        const mine = team === 1 ? g.s1 : g.s2, theirs = team === 1 ? g.s2 : g.s1;
+        if (mine <= theirs) continue;                       // only games this team won
+        ids.forEach(id => {
+          if (theirs === 0 && mine >= 11) give(id, 'bagel', m.date);
+          if (g.cb) give(id, 'comeback', m.date);
+          if (mine > target) give(id, 'overtime', m.date);
+        });
+      }
+      const gap = pre ? (team === 1 ? pre.sum2 - pre.sum1 : pre.sum1 - pre.sum2) : 0;
+      ids.forEach(id => {
+        const pr = progress[id];
+        pr.streak = won ? pr.streak + 1 : 0;
+        pr.best = Math.max(pr.best, pr.streak);
+        pr.games += m.games.length;
+        if (pr.streak >= 5) give(id, 'fire', m.date);
+        if (pr.streak >= 10) give(id, 'unstop', m.date);
+        if (pr.games >= 100) give(id, 'century', m.date);
+        if (won && gap >= 0.8 - 1e-9) give(id, 'giant', m.date);
+        ids.filter(x => x !== id).forEach(mate => {
+          pr.partners[mate] = (pr.partners[mate] || 0) + 1;
+          pr.topPartner = Math.max(pr.topPartner, pr.partners[mate]);
+          if (pr.partners[mate] >= 10) give(id, 'duo', m.date);
+        });
+      });
+    }
+  }
+  return { earned, progress };
+}
+
+/* ---------- 5. Shared render pieces ---------- */
+const avatar = (p, cls = '') => `<span class="avatar ${cls}" style="background:${p ? p.avatarColor : '#64748b'}" aria-hidden="true">${esc(initials(p?.name))}</span>`;
+const guestTag = p => (p?.isGuest ? ' <span class="chip plain">Guest</span>' : '');
+const playerOptions = sel => state.players.map(p => `<option value="${esc(p.id)}"${p.id === sel ? ' selected' : ''}>${esc(p.name)}${p.isGuest ? ' (Guest)' : ''}</option>`).join('');
+
+function statusChip(m) {
+  if (m.status === 'confirmed') return '<span class="chip ok">✓ Confirmed</span>';
+  if (m.disputedBy.length) return '<span class="chip bad">⚠ Disputed</span>';
+  return '<span class="chip wait">⏳ Pending Verification</span>';
+}
+
+/** Who may confirm or dispute: any other participant who has not answered yet, or anyone in Commissioner mode. */
+function canAct(m) {
+  if (m.status !== 'pending') return false;
+  if (state.meta.commissioner) return true;
+  const u = state.activeUserId;
+  return teamOf(m, u) !== 0 && u !== m.loggedBy && !m.confirmedBy.includes(u) && !m.disputedBy.includes(u);
+}
+const canDelete = m => state.meta.commissioner || m.loggedBy === state.activeUserId;
+
+/** One match as a card. `persp` = player id whose win/loss colours the left border. */
+function matchCard(m, persp = null) {
+  const names = t => m['team' + t].map(id => esc(pname(id))).join(' &amp; ');
+  const t = persp ? teamOf(m, persp) : 0;
+  const cls = t ? (m.winnerTeam === t ? 'win' : 'loss') : '';
+  const deltas = m.status === 'confirmed'
+    ? `<div class="deltas">${[...m.team1, ...m.team2].map(id => { const d = m.ratingDeltas[id] ?? 0; return `<span>${esc(pname(id).split(' ')[0])} <b class="${d >= 0 ? 'pos' : 'neg'}">${sign(d)}</b></span>`; }).join('')}</div>` : '';
+  const dispute = m.status === 'pending' && m.disputedBy.length ? `<div class="small neg">Disputed by ${m.disputedBy.map(id => esc(pname(id))).join(', ')}</div>` : '';
+  const acts = [
+    canAct(m) ? `<button class="btn sm primary" data-act="confirm" data-id="${esc(m.id)}">Confirm Score</button><button class="btn sm danger" data-act="dispute" data-id="${esc(m.id)}">Dispute</button>` : '',
+    canDelete(m) ? `<button class="btn sm" data-act="del-match" data-id="${esc(m.id)}">Delete</button>` : ''
+  ].join('');
+  return `<article class="match ${cls}">
+    <div class="line"><span class="tn ${m.winnerTeam === 1 ? 'w' : ''}">${m.winnerTeam === 1 ? '🏆 ' : ''}${names(1)}</span><span class="sc">${m.games.map(g => g.s1).join(' · ')}</span></div>
+    <div class="line"><span class="tn ${m.winnerTeam === 2 ? 'w' : ''}">${m.winnerTeam === 2 ? '🏆 ' : ''}${names(2)}</span><span class="sc">${m.games.map(g => g.s2).join(' · ')}</span></div>
+    <div class="meta">${statusChip(m)}<span class="chip ${m.type === 'doubles' ? 'info' : 'plain'}">${m.type === 'doubles' ? 'Doubles' : 'Singles'}</span>
+      <span>${fmtDateTime(m.date)}</span>${m.venue ? `<span>📍 ${esc(m.venue)}</span>` : ''}<span>Logged by ${esc(pname(m.loggedBy))}</span></div>
+    ${deltas}${dispute}${acts ? `<div class="row">${acts}</div>` : ''}
+  </article>`;
+}
+
+/* ---------- 6. Views ---------- */
+function render() {
+  recomputeIfNeeded();
+  renderChrome();
+  renderBanner();
+  const v = $('#view');
+  ({ board: renderBoard, log: renderLog, profile: renderProfile, badges: renderBadges, data: renderData }[tab])(v);
+}
+let dirty = true;
+function recomputeIfNeeded() { if (dirty) { recompute(); dirty = false; } }
+
+function renderChrome() {
+  $('#activeUser').innerHTML = playerOptions(state.activeUserId) || '<option value="">No players</option>';
+  document.querySelectorAll('nav.tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === tab));
+  const t = state.meta.theme;
+  $('#themeBtn').textContent = { auto: '🌗 Auto', dark: '🌙 Dark', light: '☀️ Light' }[t];
+}
+
+function renderBanner() {
+  const list = sortedMatches(true).filter(canAct);
+  if (!list.length) { $('#banner').innerHTML = ''; return; }
+  $('#banner').innerHTML = `<section class="alert">
+    <h3>Action Required: ${list.length} Match${list.length > 1 ? 'es' : ''} Pending Confirmation</h3>
+    ${list.map(m => `<div class="item">
+      <div><b>${m.team1.map(id => esc(pname(id))).join(' &amp; ')}</b> vs <b>${m.team2.map(id => esc(pname(id))).join(' &amp; ')}</b>
+        <div class="small num">${scoreStr(m)} · ${fmtDate(m.date)} · logged by ${esc(pname(m.loggedBy))}${m.disputedBy.length ? ' · <span class="neg">disputed</span>' : ''}</div></div>
+      <div class="row"><button class="btn sm primary" data-act="confirm" data-id="${esc(m.id)}">Confirm Score</button>
+        <button class="btn sm danger" data-act="dispute" data-id="${esc(m.id)}">Dispute</button></div>
+    </div>`).join('')}
+  </section>`;
+}
+
+/* --- Tab 1: Leaderboard --- */
+function renderBoard(v) {
+  const all = computeStats('all'), stats = lbMode === 'all' ? all : computeStats(lbMode);
+  const confirmed = state.matches.filter(m => m.status === 'confirmed');
+  const active = state.players.filter(p => all[p.id].w + all[p.id].l > 0);
+  const clubAvg = active.length ? active.reduce((s, p) => s + (p.historyDoubles.length ? p.ratingDoubles : p.ratingSingles), 0) / active.length : null;
+  // Most active this calendar month
+  const now = new Date(), counts = {};
+  state.matches.forEach(m => { const d = new Date(m.date); if (d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()) [...m.team1, ...m.team2].forEach(id => counts[id] = (counts[id] || 0) + 1); });
+  const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+
+  const key = lbMode === 'singles' ? 'Singles' : 'Doubles';
+  const rows = state.players.filter(p => !lbRegulars || !p.isGuest).map(p => ({ p, s: stats[p.id], n: stats[p.id].w + stats[p.id].l }))
+    .sort((a, b) => (b.n > 0) - (a.n > 0) || b.p['rating' + key] - a.p['rating' + key] || a.p.name.localeCompare(b.p.name));
+  const ratingCell = (p, k) => {
+    const t = trend(p, k);
+    const tr = t === null ? '<span class="trend muted">new</span>' : Math.abs(t) < 0.0005 ? '<span class="trend muted">→</span>'
+      : `<span class="trend ${t > 0 ? 'pos' : 'neg'}">${t > 0 ? '▲' : '▼'} ${Math.abs(t).toFixed(3)}</span>`;
+    return `<span class="rating">${fmtR(p['rating' + k])}</span>${tr}`;
+  };
+  const pill = (id, label) => `<button class="pill" data-act="lb-filter" data-f="${id}" aria-pressed="${lbMode === id}">${label}</button>`;
+
+  v.innerHTML = `<div class="stack">
+    <section class="hero">
+      <h1>Court Overview</h1>
+      <div class="hero-grid">
+        <div class="stat"><b>${state.matches.length}</b><span>Matches played</span></div>
+        <div class="stat"><b>${active.length}</b><span>Active players</span></div>
+        <div class="stat"><b>${clubAvg === null ? '—' : fmtR(clubAvg)}</b><span>Club average rating</span></div>
+        <div class="stat"><b class="name">${top ? esc(pname(top[0])) : '—'}</b><span>Most active this month${top ? ` · ${top[1]} match${top[1] > 1 ? 'es' : ''}` : ''}</span></div>
+      </div>
+    </section>
+    <section class="card">
+      <div class="row spread" style="margin-bottom:12px"><h2>Leaderboard</h2><button class="btn sm" data-act="add-player">+ Add Player</button></div>
+      <div class="pills" style="margin-bottom:8px">${pill('all', 'All Players')}${pill('doubles', 'Doubles')}${pill('singles', 'Singles')}
+        <button class="pill" data-act="lb-reg" aria-pressed="${lbRegulars}">Regulars Only (No Guests)</button></div>
+      ${rows.length ? `<div class="table-wrap"><table>
+        <thead><tr><th>Rank</th><th>Player</th><th>Doubles</th><th>Singles</th><th class="r">W – L</th><th class="r">Win %</th><th class="r">Pts Diff</th><th>Streak</th></tr></thead>
+        <tbody>${rows.map(({ p, s, n }, i) => `<tr>
+          <td><span class="rank ${i < 3 && n ? 'g' + (i + 1) : ''}">${i + 1}</span></td>
+          <td><button class="who" data-act="view-player" data-id="${esc(p.id)}">${avatar(p)}<span>${esc(p.name)}${guestTag(p)}</span></button></td>
+          <td>${ratingCell(p, 'Doubles')}</td><td>${ratingCell(p, 'Singles')}</td>
+          <td class="r">${s.w} – ${s.l}</td>
+          <td class="r">${n ? Math.round(100 * s.w / n) + '%' : '—'}</td>
+          <td class="r ${s.pf - s.pa > 0 ? 'pos' : s.pf - s.pa < 0 ? 'neg' : ''}">${n ? signInt(s.pf - s.pa) : '—'}</td>
+          <td>${s.streak > 0 ? `🔥 ${s.streak} W` : s.streak < 0 ? `❄️ ${-s.streak} L` : '—'}</td>
+        </tr>`).join('')}</tbody></table></div>
+        <p class="small muted" style="margin-top:10px">${confirmed.length} confirmed match${confirmed.length === 1 ? '' : 'es'} count toward ratings and records. Trend arrows cover each player's last 5 rated matches.</p>`
+      : `<p class="muted">No players yet. Add everyone who plays, then log your first match.</p><div class="row" style="margin-top:12px"><button class="btn primary" data-act="add-player">+ Add your first player</button>${state.meta.syncUrl ? '' : '<button class="btn" data-act="tab" data-tab="data">Join a shared club (sync)</button>'}</div>`}
+    </section>
+  </div>`;
+}
+
+/* --- Tab 2: Log Match --- */
+function freshForm(keepPlayers = false) {
+  const prev = form;
+  form = {
+    type: prev?.type ?? 'doubles', format: prev?.format ?? '1_to_11', venue: prev?.venue ?? '', date: localInput(),
+    t1: keepPlayers && prev ? prev.t1 : [state.activeUserId, null], t2: keepPlayers && prev ? prev.t2 : [null, null],
+    games: [0, 1, 2].map(() => ({ s1: '', s2: '', cb: false }))
+  };
+}
+
+/** Check one game against the win condition. Returns { winner } or { error }. */
+function checkGame(s1, s2, f) {
+  const hi = Math.max(s1, s2), lo = Math.min(s1, s2), target = f.target;
+  if (s1 === s2) return { error: 'Scores are tied' };
+  if (f.winBy === 1) {                       // first to the target wins, even at 11–10
+    if (hi < target) return { error: `Winner needs ${target} points` };
+    if (hi > target) return { error: `Game ends as soon as someone reaches ${target}` };
+    return { winner: s1 > s2 ? 1 : 2 };
+  }
+  if (hi < target) return { error: `Winner needs ${target} points` };
+  if (hi - lo < 2) return { error: 'Must win by 2' };
+  if (hi > target && hi - lo !== 2) return { error: `Past ${target}, the game ends at a 2-point lead` };
+  return { winner: s1 > s2 ? 1 : 2 };
+}
+
+/** Validate the whole score sheet. Returns { ok, winner, games, rows:[msg], msg }. */
+function validateScores() {
+  const f = FORMATS[form.format], rows = ['', '', ''], games = [];
+  const wins = { 1: 0, 2: 0 };
+  let msg = '';
+  for (let i = 0; i < f.games; i++) {
+    const g = form.games[i], blank = g.s1 === '' && g.s2 === '';
+    const decided = wins[1] === 2 || wins[2] === 2;
+    if (blank) {
+      if (!decided && !msg) msg = i === 0 ? 'Enter the score to see the winner' : `Enter game ${i + 1}`;
+      continue;
+    }
+    if (decided) { rows[i] = 'Match was already decided in two games'; msg = msg || rows[i]; continue; }
+    if (g.s1 === '' || g.s2 === '') { rows[i] = 'Enter both scores'; msg = msg || `Game ${i + 1}: enter both scores`; continue; }
+    if (games.length !== i) { rows[i] = 'Fill in the earlier game first'; msg = msg || rows[i]; continue; }
+    const c = checkGame(+g.s1, +g.s2, f);
+    if (c.error) { rows[i] = c.error; msg = msg || `Game ${i + 1}: ${c.error}`; continue; }
+    wins[c.winner]++;
+    games.push({ s1: +g.s1, s2: +g.s2, ...(g.cb ? { cb: true } : {}) });
+  }
+  const need = f.games === 1 ? 1 : 2;
+  const winner = wins[1] >= need ? 1 : wins[2] >= need ? 2 : 0;
+  const hasErr = rows.some(Boolean);
+  return { ok: !!winner && !hasErr, winner, games, rows, msg, hasErr, wins };
+}
+
+function slotHtml(team, i) {
+  const id = form['t' + team][i], p = id ? P(id) : null, key = `${team}-${i}`;
+  const label = form.type === 'singles' ? 'Player' : `Player ${i + 1}`;
+  return `<div class="slot-wrap" data-slot="${key}">
+    <button type="button" class="slot ${p ? 'filled' : ''}" data-act="slot-open" data-slot="${key}" aria-haspopup="listbox" aria-expanded="${openSlot === key}">
+      ${p ? `${avatar(p)}<span>${esc(p.name)}${guestTag(p)}</span>` : `<span class="muted">Select ${label}</span>`}<span class="caret">▾</span></button>
+    ${openSlot === key ? `<div class="pop"><input type="search" id="pickSearch" placeholder="Search players…" autocomplete="off" aria-label="Search players">
+      <div class="pop-list" id="pickList">${pickListHtml('')}</div>
+      <button type="button" class="btn sm" data-act="add-guest">+ Add Guest Player</button></div>` : ''}
+  </div>`;
+}
+function pickListHtml(q) {
+  const [team, i] = openSlot.split('-').map(Number), current = form['t' + team][i];
+  const taken = new Set([...form.t1, ...form.t2].filter(x => x && x !== current));
+  const list = state.players.filter(p => p.name.toLowerCase().includes(q.trim().toLowerCase()));
+  const key = form.type === 'singles' ? 'ratingSingles' : 'ratingDoubles';
+  return list.map(p => `<button type="button" class="opt" data-act="pick" data-id="${esc(p.id)}" ${taken.has(p.id) ? 'disabled title="Already in this match"' : ''}>
+      ${avatar(p)}<span>${esc(p.name)}${guestTag(p)}</span><span class="num">${fmtR(p[key])}</span></button>`).join('')
+    || '<p class="small muted" style="padding:8px">No match — add them as a guest below.</p>';
+}
+
+function renderLog(v) {
+  if (!state.players.length) { v.innerHTML = '<section class="card stack"><h2>Log a Match</h2><p class="muted">Add at least two players before logging a match.</p><div><button class="btn primary" data-act="add-player">+ Add Player</button></div></section>'; return; }
+  if (!form || (!form.t1[0] && !form.t2[0])) freshForm();
+  const n = form.type === 'singles' ? 1 : 2, f = FORMATS[form.format];
+  const recent = sortedMatches(true).slice(0, 8);
+  v.innerHTML = `<div class="stack">
+    <section class="card stack">
+      <h2>Log a Match</h2>
+      <div class="seg" role="group" aria-label="Match type">
+        <button type="button" data-act="form-type" data-v="doubles" aria-pressed="${form.type === 'doubles'}">Doubles (2v2)</button>
+        <button type="button" data-act="form-type" data-v="singles" aria-pressed="${form.type === 'singles'}">Singles (1v1)</button>
+      </div>
+      <div class="teams">
+        <div class="team"><h3>Team 1</h3>${Array.from({ length: n }, (_, i) => slotHtml(1, i)).join('')}</div>
+        <div class="vs">VS</div>
+        <div class="team t2"><h3>Team 2</h3>${Array.from({ length: n }, (_, i) => slotHtml(2, i)).join('')}</div>
+      </div>
+      <div class="grid2">
+        <label class="fld">Venue
+          <input type="text" id="f-venue" list="venueList" value="${esc(form.venue)}" placeholder="Pick a saved venue or type a new one" autocomplete="off">
+          <datalist id="venueList">${state.venues.map(x => `<option value="${esc(x)}">`).join('')}</datalist></label>
+        <label class="fld">Date &amp; time<input type="datetime-local" id="f-date" value="${esc(form.date)}"></label>
+      </div>
+      <label class="fld">Format / win condition
+        <select id="f-format">${Object.entries(FORMATS).map(([k, x]) => `<option value="${k}"${k === form.format ? ' selected' : ''}>${x.label}</option>`).join('')}</select></label>
+      <div>
+        <div class="row spread small" style="font-weight:700"><span class="pos">Team 1</span><span style="color:var(--blue-ink)">Team 2</span></div>
+        ${Array.from({ length: f.games }, (_, g) => `<div class="game">
+          <span class="gl">G${g + 1}</span>
+          ${[1, 2].map(t => `<div class="stepper t${t}">
+            <button type="button" data-act="step" data-g="${g}" data-t="${t}" data-d="-1" aria-label="Game ${g + 1} team ${t} minus one">−</button>
+            <input type="number" inputmode="numeric" min="0" max="99" data-score data-g="${g}" data-t="${t}" value="${esc(form.games[g]['s' + t])}" aria-label="Game ${g + 1} team ${t} score" placeholder="–">
+            <button type="button" data-act="step" data-g="${g}" data-t="${t}" data-d="1" aria-label="Game ${g + 1} team ${t} plus one">+</button></div>`).join('<span class="dash">–</span>')}
+          <div class="gx"><label class="check"><input type="checkbox" data-cb data-g="${g}" ${form.games[g].cb ? 'checked' : ''}>Winner came back from 5+ down</label>
+            <span class="neg" data-rowmsg="${g}"></span></div>
+        </div>`).join('')}
+      </div>
+      <div class="winner" id="winnerBadge" aria-live="polite"></div>
+      <label class="check"><input type="checkbox" id="commToggle" ${state.meta.commissioner ? 'checked' : ''}>
+        <span><b>Commissioner / Honor mode</b> — confirm scores immediately, no peer check</span></label>
+      <div class="row"><button class="btn primary" style="flex:1" data-act="log-submit">Save Match</button><button class="btn" data-act="form-reset">Clear</button></div>
+    </section>
+    <section class="card"><h2>Recent matches</h2>
+      ${recent.length ? `<div class="mlist">${recent.map(m => matchCard(m)).join('')}</div>` : '<p class="muted">No matches logged yet.</p>'}
+    </section>
+  </div>`;
+  updateScoreStatus();
+  if (openSlot) $('#pickSearch')?.focus();
+}
+
+/** Live validation + Match Winner badge. Runs on every keystroke without re-rendering inputs. */
+function updateScoreStatus() {
+  const r = validateScores(), box = $('#winnerBadge');
+  if (!box) return;
+  document.querySelectorAll('[data-rowmsg]').forEach(el => { el.textContent = r.rows[+el.dataset.rowmsg] || ''; });
+  const names = t => form['t' + t].filter(Boolean).map(id => pname(id)).join(' & ') || `Team ${t}`;
+  box.className = 'winner' + (r.ok ? ` ok t${r.winner}` : r.hasErr ? ' err' : '');
+  box.textContent = r.ok ? `🏆 Match Winner: ${names(r.winner)}` + (FORMATS[form.format].games === 3 ? ` (${r.wins[r.winner]}–${r.wins[3 - r.winner]})` : '') : r.msg;
+}
+
+/* --- Tab 3: Player profile --- */
+function sparkline(p, key) {
+  const h = p['history' + key];
+  if (!h.length) return `<p class="muted small">No confirmed ${key.toLowerCase()} matches yet — the rating stays at ${fmtR(p.initialRating)} until one is confirmed.</p>`;
+  const pts = [{ rating: p.initialRating, tip: `Starting rating\n${fmtR(p.initialRating)}` }, ...h.map(x => {
+    const m = M(x.matchId), t = m ? teamOf(m, p.id) : 1, d = m?.ratingDeltas[p.id] ?? 0;
+    return { rating: x.rating, tip: `${fmtDate(x.date)} · ${m ? (m.winnerTeam === t ? 'Won' : 'Lost') + ' ' + scoreStr(m, t) : ''}\n${sign(d)}  →  ${fmtR(x.rating)}` };
+  })];
+  let lo = Math.min(...pts.map(q => q.rating)), hi = Math.max(...pts.map(q => q.rating));
+  if (hi - lo < 0.04) { lo -= 0.02; hi += 0.02; }
+  const x = i => (i / (pts.length - 1)) * 100, y = r => 6 + (1 - (r - lo) / (hi - lo)) * 88;
+  const line = pts.map((q, i) => `${i ? 'L' : 'M'}${x(i).toFixed(2)} ${y(q.rating).toFixed(2)}`).join(' ');
+  return `<div class="row spread small muted num"><span>High ${fmtR(hi)}</span><span>${h.length} rated match${h.length > 1 ? 'es' : ''}</span></div>
+    <div class="chart">
+      <svg viewBox="0 0 100 100" preserveAspectRatio="none" role="img" aria-label="${key} rating over time, from ${fmtR(pts[0].rating)} to ${fmtR(pts[pts.length - 1].rating)}">
+        <line x1="0" x2="100" y1="${y(p.initialRating)}" y2="${y(p.initialRating)}" stroke="var(--line)" stroke-width="1" stroke-dasharray="4 4" vector-effect="non-scaling-stroke"/>
+        <path d="${line} L100 100 L0 100 Z" fill="var(--green)" opacity=".12"/>
+        <path d="${line}" fill="none" stroke="var(--green)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+      </svg>
+      ${pts.map((q, i) => `<button type="button" class="dot" style="left:${x(i).toFixed(2)}%;top:${y(q.rating).toFixed(2)}%" data-tip="${esc(q.tip)}" data-x="${x(i).toFixed(0)}" data-y="${y(q.rating).toFixed(0)}" aria-label="${esc(q.tip.replace(/\n/g, ', '))}"></button>`).join('')}
+    </div>
+    <div class="small muted num">Low ${fmtR(lo)} · dashed line = starting rating ${fmtR(p.initialRating)}</div>`;
+}
+
+function winRing(w, l) {
+  const n = w + l, pct = n ? w / n : 0, C = 2 * Math.PI * 34;
+  return `<div class="ring"><svg width="84" height="84" viewBox="0 0 84 84" role="img" aria-label="Win rate ${Math.round(pct * 100)} percent">
+    <circle cx="42" cy="42" r="34" fill="none" stroke="var(--raised)" stroke-width="9"/>
+    <circle cx="42" cy="42" r="34" fill="none" stroke="var(--green)" stroke-width="9" stroke-linecap="round" stroke-dasharray="${(pct * C).toFixed(1)} ${C.toFixed(1)}" transform="rotate(-90 42 42)"/>
+    <text x="42" y="47" text-anchor="middle" font-family="var(--head)" font-weight="800" font-size="17" fill="var(--ink)">${n ? Math.round(pct * 100) + '%' : '—'}</text>
+  </svg><div><b class="num">${w} W – ${l} L</b><div class="small muted">Win rate, all matches</div></div></div>`;
+}
+
+function renderProfile(v) {
+  const p = P(viewPid) || P(state.activeUserId) || state.players[0];
+  if (!p) { v.innerHTML = '<section class="card"><p class="muted">No players yet.</p><button class="btn primary" data-act="add-player" style="margin-top:10px">+ Add Player</button></section>'; return; }
+  viewPid = p.id;
+  const s = computeStats('all')[p.id];
+  const mine = sortedMatches(true).filter(m => teamOf(m, p.id));
+  const conf = mine.filter(m => m.status === 'confirmed');
+
+  // Doubles synergy
+  const partners = {};
+  conf.filter(m => m.type === 'doubles').forEach(m => {
+    const t = teamOf(m, p.id), mate = m['team' + t].find(id => id !== p.id);
+    if (!mate) return;
+    const a = partners[mate] ||= { n: 0, w: 0, diff: 0 };
+    a.n++; a.w += m.winnerTeam === t; a.diff += pointsFor(m, t) - pointsFor(m, 3 - t);
+  });
+  const pList = Object.entries(partners).sort((a, b) => b[1].n - a[1].n);
+  const best = pList.filter(([, a]) => a.n >= 3).sort((a, b) => b[1].w / b[1].n - a[1].w / a[1].n || b[1].n - a[1].n)[0]?.[0];
+
+  // Rivalries (conf is newest-first, so the first three encounters are the latest)
+  const rivals = {};
+  conf.forEach(m => {
+    const t = teamOf(m, p.id), won = m.winnerTeam === t;
+    m['team' + (3 - t)].forEach(opp => {
+      const a = rivals[opp] ||= { w: 0, l: 0, diff: 0, last: [] };
+      won ? a.w++ : a.l++; a.diff += pointsFor(m, t) - pointsFor(m, 3 - t);
+      if (a.last.length < 3) a.last.push({ won, score: scoreStr(m, t) });
+    });
+  });
+  const rList = Object.entries(rivals).sort((a, b) => (b[1].w + b[1].l) - (a[1].w + a[1].l));
+
+  v.innerHTML = `<div class="stack">
+    <section class="card stack">
+      <div class="row"><label class="fld" style="flex:1;min-width:180px">View player<select id="profileSel">${playerOptions(p.id)}</select></label>
+        <button class="btn sm" data-act="edit-player" data-id="${esc(p.id)}" style="align-self:end">Edit</button>
+        <button class="btn sm" data-act="add-player" style="align-self:end">+ Add Player</button></div>
+      <div class="phead">${avatar(p, 'lg')}
+        <div style="flex:1;min-width:150px"><h2>${esc(p.name)}${guestTag(p)}</h2>
+          <div class="small muted">Member since ${fmtDate(p.createdDate)}${p.phone ? ' · ' + esc(p.phone) : ''}</div></div>
+        ${winRing(s.w, s.l)}
+      </div>
+      <div class="kpis">
+        <div class="kpi"><b>${fmtR(p.ratingDoubles)}</b><span>Doubles rating${p.historyDoubles.length < 5 ? ' · provisional' : ''}</span></div>
+        <div class="kpi"><b>${fmtR(p.ratingSingles)}</b><span>Singles rating${p.historySingles.length < 5 ? ' · provisional' : ''}</span></div>
+        <div class="kpi"><b class="${s.pf - s.pa > 0 ? 'pos' : s.pf - s.pa < 0 ? 'neg' : ''}">${signInt(s.pf - s.pa) || 0}</b><span>Points differential</span></div>
+        <div class="kpi"><b>${s.streak > 0 ? `🔥 ${s.streak} W` : s.streak < 0 ? `❄️ ${-s.streak} L` : '—'}</b><span>Current streak</span></div>
+      </div>
+    </section>
+    <div class="cols">
+      <section class="card"><h3>Doubles rating progression</h3>${sparkline(p, 'Doubles')}</section>
+      <section class="card"><h3>Singles rating progression</h3>${sparkline(p, 'Singles')}</section>
+    </div>
+    <div class="cols">
+      <section class="card"><h3>Doubles Synergy — best partners</h3>
+        ${pList.length ? `<div class="table-wrap"><table><thead><tr><th>Partner</th><th class="r">Played</th><th class="r">Win %</th><th class="r">Avg pt diff</th></tr></thead><tbody>
+          ${pList.map(([id, a]) => `<tr><td>${esc(pname(id))}${id === best ? ' <span class="chip ok">⭐ Best Partner</span>' : ''}</td><td class="r">${a.n}</td>
+            <td class="r">${Math.round(100 * a.w / a.n)}%</td><td class="r ${a.diff > 0 ? 'pos' : a.diff < 0 ? 'neg' : ''}">${sign(a.diff / a.n, 1)}</td></tr>`).join('')}
+        </tbody></table></div><p class="small muted" style="margin-top:8px">Best Partner needs at least 3 matches together.</p>` : '<p class="muted small">No confirmed doubles matches yet.</p>'}
+      </section>
+      <section class="card"><h3>Rivalry Matrix — head to head</h3>
+        ${rList.length ? `<div class="table-wrap"><table><thead><tr><th>Opponent</th><th class="r">Record</th><th class="r">Pt diff</th><th>Last 3</th></tr></thead><tbody>
+          ${rList.map(([id, a]) => `<tr><td>${esc(pname(id))}</td><td class="r">${a.w} – ${a.l}</td><td class="r ${a.diff > 0 ? 'pos' : a.diff < 0 ? 'neg' : ''}">${signInt(a.diff) || 0}</td>
+            <td><span class="enc">${a.last.map(e => `<span class="chip ${e.won ? 'ok' : 'bad'}" title="${esc(e.score)}">${e.won ? 'W' : 'L'} ${esc(e.score.split(', ')[0])}${e.score.includes(',') ? '…' : ''}</span>`).join('')}</span></td></tr>`).join('')}
+        </tbody></table></div>` : '<p class="muted small">No confirmed matches yet.</p>'}
+      </section>
+    </div>
+    <section class="card"><h3>Recent match feed</h3>
+      ${mine.length ? `<div class="mlist">${mine.slice(0, 12).map(m => matchCard(m, p.id)).join('')}</div>` : '<p class="muted small">No matches yet.</p>'}
+    </section>
+  </div>`;
+}
+
+/* --- Tab 4: Badges --- */
+function renderBadges(v) {
+  const p = P(viewPid) || P(state.activeUserId) || state.players[0];
+  if (!p) { v.innerHTML = '<section class="card"><p class="muted">No players yet.</p></section>'; return; }
+  viewPid = p.id;
+  const { earned, progress } = computeBadges(), got = earned[p.id], pr = progress[p.id];
+  const prog = { fire: `Best streak ${Math.min(pr.best, 5)}/5`, unstop: `Best streak ${Math.min(pr.best, 10)}/10`, century: `${Math.min(pr.games, 100)}/100 games`, duo: `${Math.min(pr.topPartner, 10)}/10 with one partner` };
+  v.innerHTML = `<div class="stack">
+    <section class="card stack">
+      <div class="row spread"><h2>Trophy Case</h2><span class="chip ok num">${Object.keys(got).length} / ${BADGES.length} unlocked</span></div>
+      <label class="fld">Player<select id="badgeSel">${playerOptions(p.id)}</select></label>
+      <div class="badges">${BADGES.map(b => got[b.id]
+        ? `<div class="badge on c-${b.color}"><span class="ico">${b.ico}</span><h3>${b.name}</h3><p>${b.desc}</p><span class="when">Earned ${fmtDate(got[b.id])}</span></div>`
+        : `<div class="badge"><span class="ico">${b.ico}</span><h3>${b.name}</h3><p>${b.desc}</p>${prog[b.id] ? `<p class="num"><b>${prog[b.id]}</b></p>` : '<p>🔒 Locked</p>'}</div>`).join('')}</div>
+      <p class="small muted">Badges come from confirmed matches. For Comeback King, tick “Winner came back from 5+ down” when logging the game.</p>
+    </section>
+  </div>`;
+}
+
+/* --- Tab 5: Data, backup & sync --- */
+function renderData(v) {
+  const m = state.meta;
+  v.innerHTML = `<div class="stack">
+    <section class="card stack"><h2>Data portability</h2>
+      <p class="small muted">Everything lives in this browser. Export a backup regularly, or turn on Google Sheets sync below.${m.lastBackup ? ` Last backup: ${fmtDateTime(m.lastBackup)}.` : ''}</p>
+      <div class="row"><button class="btn primary" data-act="export-json">Export JSON Backup</button>
+        <button class="btn" data-act="import-json">Import JSON Backup</button>
+        <button class="btn" data-act="export-csv">Export Match History to CSV</button></div>
+    </section>
+    <section class="card stack"><h2>Google Sheets sync</h2>
+      <ol class="steps">
+        <li>Create a Google Sheet, then open <b>Extensions → Apps Script</b> (or start a project at script.google.com).</li>
+        <li>Paste the script below, and change <code>SECRET</code> to your own passcode.</li>
+        <li><b>Deploy → New deployment → Web app</b>. Execute as <b>Me</b>, access <b>Anyone</b>. Copy the Web App URL.</li>
+        <li>Paste the URL and the same passcode here.</li>
+      </ol>
+      <details><summary>Show Google Apps Script code</summary><pre id="gasCode"></pre></details>
+      <div class="row"><button class="btn sm" data-act="copy-script">Copy script</button></div>
+      <div class="grid2">
+        <label class="fld">Web App URL<input type="url" id="syncUrl" value="${esc(m.syncUrl)}" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off"></label>
+        <label class="fld">Secret Passcode<input type="password" id="syncSecret" value="${esc(m.syncSecret)}" autocomplete="off"></label>
+      </div>
+      <label class="check"><input type="checkbox" id="autoSync" ${m.autoSync ? 'checked' : ''}>Auto-sync a few seconds after every change</label>
+      <div class="row"><button class="btn blue" data-act="sync-now">Sync Now</button><button class="btn" data-act="sync-restore">Restore from Sheet</button></div>
+      <p class="small muted" id="syncStatus">${esc(syncStatusText())}</p>
+      <p class="small muted"><b>Sharing with other devices:</b> every phone that enters the same Web App URL and passcode shares one set of players and matches. Each device checks the sheet when the app opens and about once a minute. The passcode is kept in this browser only; it is left out of backups and of the data sent to the sheet.</p>
+    </section>
+    <section class="card stack"><h2>Install as an app</h2>
+      <p class="small muted">On Android or desktop Chrome, use the button below or the browser menu → <b>Install app</b>. On iPhone, open this page in Safari, tap <b>Share</b>, then <b>Add to Home Screen</b>. Once installed it opens full-screen and works offline.</p>
+      <div><button class="btn primary" data-act="install" ${installEvent ? '' : 'disabled'}>${installEvent ? 'Install PickleTrack' : 'Install from your browser menu'}</button></div>
+    </section>
+    <section class="card stack"><h2>Settings</h2>
+      <label class="check"><input type="checkbox" id="commToggle" ${m.commissioner ? 'checked' : ''}>
+        <span><b>Commissioner / Honor mode</b> — new matches are confirmed immediately, and this device can confirm, dispute or delete any match</span></label>
+      <div class="row"><button class="btn danger" data-act="reset-all">Erase all data…</button></div>
+    </section>
+  </div>`;
+  $('#gasCode').textContent = GAS_CODE;
+}
+
+/* ---------- 7. Match logging + peer confirmation ---------- */
+
+/** Run a change, then celebrate any badge unlocks or half-point rating milestones it caused. */
+function withCelebration(change, fallbackToast) {
+  recomputeIfNeeded();
+  const beforeR = Object.fromEntries(state.players.map(p => [p.id, [p.ratingDoubles, p.ratingSingles]]));
+  const beforeB = computeBadges().earned;
+  change();
+  recompute(); dirty = false;
+  save();
+  const news = [];
+  const afterB = computeBadges().earned;
+  for (const p of state.players) {
+    for (const b of BADGES) if (afterB[p.id][b.id] && !beforeB[p.id]?.[b.id]) news.push(`${b.ico} ${p.name} unlocked ${b.name}!`);
+    [['ratingDoubles', 'doubles'], ['ratingSingles', 'singles']].forEach(([k, label], i) => {
+      const was = beforeR[p.id]?.[i];
+      if (was !== undefined && Math.floor(p[k] * 2 + 1e-9) > Math.floor(was * 2 + 1e-9)) news.push(`🚀 ${p.name} crossed ${(Math.floor(p[k] * 2 + 1e-9) / 2).toFixed(3)} in ${label}!`);
+    });
+  }
+  render();
+  if (news.length) { confetti(); toast(news.length > 1 ? `${news[0]} (+${news.length - 1} more)` : news[0], 4000); }
+  else if (fallbackToast) toast(fallbackToast);
+}
+
+function submitMatch() {
+  const n = form.type === 'singles' ? 1 : 2;
+  const t1 = form.t1.slice(0, n), t2 = form.t2.slice(0, n), all = [...t1, ...t2];
+  if (!state.activeUserId) return toast('Add a player first');
+  if (all.some(x => !x)) return toast('Pick every player before saving');
+  if (new Set(all).size !== all.length) return toast('A player cannot appear twice in one match');
+  const r = validateScores();
+  if (!r.ok) return toast(r.msg || 'Check the scores');
+  const date = new Date(form.date);
+  if (isNaN(date)) return toast('Pick a valid date and time');
+  const venue = form.venue.trim();
+  const comm = state.meta.commissioner;
+  const match = {
+    id: uid('m'), date: date.toISOString(), venue, type: form.type, team1: t1, team2: t2, format: form.format, games: r.games,
+    winnerTeam: r.winner, status: comm ? 'confirmed' : 'pending', loggedBy: state.activeUserId, confirmedBy: [state.activeUserId], disputedBy: [], ratingDeltas: {}
+  };
+  withCelebration(() => {
+    state.matches.push(match);
+    if (venue && !state.venues.some(x => x.toLowerCase() === venue.toLowerCase())) state.venues.push(venue);
+    freshForm(true);       // keep the same four players for the next game
+  }, comm ? 'Match saved — ratings updated' : 'Match saved — waiting for an opponent to confirm');
+}
+
+function confirmMatch(id) {
+  const m = M(id), u = state.activeUserId;
+  if (!m || !canAct(m)) return;
+  withCelebration(() => {
+    if (!m.confirmedBy.includes(u)) m.confirmedBy.push(u);
+    m.disputedBy = m.disputedBy.filter(x => x !== u);
+    const loggerTeam = teamOf(m, m.loggedBy), myTeam = teamOf(m, u);
+    // An opponent of the logger must verify. If the logger did not play, any participant counts.
+    const verifies = myTeam !== 0 && (loggerTeam === 0 || myTeam !== loggerTeam);
+    if (state.meta.commissioner) { m.disputedBy = []; m.status = 'confirmed'; }
+    else if (verifies && !m.disputedBy.length) m.status = 'confirmed';
+  });
+  if (m.status !== 'confirmed') toast(m.disputedBy.length ? 'Recorded — the dispute still needs resolving' : 'Recorded — an opponent still needs to confirm');
+  else if (!$('#toast').classList.contains('show')) toast('Score confirmed — ratings updated');
+}
+
+async function disputeMatch(id) {
+  const m = M(id), u = state.activeUserId;
+  if (!m || !canAct(m)) return;
+  const ok = await confirmDialog({ title: 'Dispute this score?', body: `${scoreStr(m)} — the match stays unrated until the dispute is settled. The logger can delete and re-enter it.`, ok: 'Dispute', danger: true });
+  if (!ok) return;
+  if (!m.disputedBy.includes(u)) m.disputedBy.push(u);
+  m.confirmedBy = m.confirmedBy.filter(x => x !== u || x === m.loggedBy);
+  save(); render(); toast('Match marked as disputed');
+}
+
+async function deleteMatch(id) {
+  const m = M(id);
+  if (!m || !canDelete(m)) return;
+  const ok = await confirmDialog({ title: 'Delete this match?', body: `${m.team1.map(pname).join(' & ')} vs ${m.team2.map(pname).join(' & ')}, ${scoreStr(m)}. Ratings will be recalculated without it.`, ok: 'Delete', danger: true });
+  if (!ok) return;
+  state.matches = state.matches.filter(x => x.id !== id);
+  dirty = true; save(); render(); toast('Match deleted');
+}
+
+/** Add or edit a player. Resolves with the player (or null if cancelled). */
+function playerDialog({ id = null, guest = false, name = '' } = {}) {
+  const p = id ? P(id) : null;
+  const hasMatches = p && state.matches.some(m => teamOf(m, p.id));
+  modalValidate = () => {
+    const nm = $('#pName').value.trim();
+    if (!nm) { toast('Enter a name'); return false; }
+    if (state.players.some(x => x.id !== id && x.name.toLowerCase() === nm.toLowerCase())) { toast('That name is already taken'); return false; }
+    return true;
+  };
+  return openModal(`<h2>${p ? 'Edit player' : guest ? 'Add guest player' : 'Add player'}</h2>
+    <label class="fld">Name<input type="text" id="pName" value="${esc(p?.name ?? name)}" maxlength="40" autocomplete="off"></label>
+    <label class="fld">Phone (optional)<input type="tel" id="pPhone" value="${esc(p?.phone ?? '')}" maxlength="20" autocomplete="off"></label>
+    <label class="fld">Starting rating
+      <select id="pInit" ${hasMatches ? 'disabled' : ''}>${[3, 3.5].concat(p && ![3, 3.5].includes(p.initialRating) ? [p.initialRating] : []).map(r => `<option value="${r}"${(p?.initialRating ?? 3) === r ? ' selected' : ''}>${fmtR(r)}${r === 3 ? ' — default provisional' : r === 3.5 ? ' — experienced' : ''}</option>`).join('')}</select></label>
+    ${hasMatches ? '<p class="small muted">Starting rating is locked once a player has matches.</p>' : ''}
+    <label class="check"><input type="checkbox" id="pGuest" ${(p ? p.isGuest : guest) ? 'checked' : ''}>Guest player (occasional visitor)</label>
+    <div class="acts">${p && !hasMatches ? '<button class="btn danger" data-modal="alt" style="margin-right:auto">Remove</button>' : ''}
+      <button class="btn" data-modal="cancel">Cancel</button><button class="btn primary" data-modal="ok">Save</button></div>`, '#pName')
+  .then(res => {
+    if (res === 'alt' && p) {
+      state.players = state.players.filter(x => x.id !== p.id);
+      if (state.activeUserId === p.id) state.activeUserId = state.players[0]?.id ?? null;
+      if (viewPid === p.id) viewPid = null;
+      form = null; dirty = true; save(); render(); toast('Player removed');
+      return null;
+    }
+    if (res !== 'ok') return null;
+    const vals = { name: $('#pName').value.trim(), phone: $('#pPhone').value.trim(), isGuest: $('#pGuest').checked, initialRating: +$('#pInit').value };
+    let out = p;
+    if (p) Object.assign(p, vals);
+    else {
+      out = { id: uid('p'), ...vals, avatarColor: AVATAR_COLORS[state.players.length % AVATAR_COLORS.length],
+        ratingDoubles: vals.initialRating, ratingSingles: vals.initialRating, historyDoubles: [], historySingles: [], createdDate: new Date().toISOString() };
+      state.players.push(out);
+      if (!state.activeUserId) state.activeUserId = out.id;
+    }
+    dirty = true; save();
+    toast(p ? 'Player updated' : `${out.name} added`);
+    return out;
+  });
+}
+
+/* ---------- 8. Data portability + Google Sheets sync ---------- */
+
+/** State as shared outside this browser: no sync URL or passcode. */
+function exportable() {
+  const copy = JSON.parse(JSON.stringify(state));
+  delete copy.meta.syncUrl; delete copy.meta.syncSecret; delete copy.meta.remoteUpdatedAt; delete copy.meta.lastSync;
+  return copy;
+}
+function download(name, text, mime) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type: mime }));
+  a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+function exportJson() {
+  state.meta.lastBackup = new Date().toISOString(); persist();
+  download(`pickletrack_backup_${todayStamp()}.json`, JSON.stringify(exportable(), null, 2), 'application/json');
+  render(); toast('Backup downloaded');
+}
+function exportCsv() {
+  // Leading = + - @ would run as a formula in Excel/Sheets, so those cells get a quote prefix.
+  const cell = v => { let s = String(v ?? ''); if (/^[=+\-@\t\r]/.test(s)) s = "'" + s; return `"${s.replace(/"/g, '""')}"`; };
+  const names = ids => ids.map(pname).join(' & ');
+  const head = ['Match ID', 'Date', 'Venue', 'Type', 'Format', 'Team 1', 'Team 2', 'Scores (T1-T2)', 'Team 1 Points', 'Team 2 Points', 'Winner', 'Status', 'Logged By', 'Confirmed By', 'Disputed By', 'Rating Changes'];
+  const rows = sortedMatches(true).map(m => [m.id, new Date(m.date).toLocaleString(), m.venue, m.type, FORMATS[m.format].label, names(m.team1), names(m.team2),
+    m.games.map(g => `${g.s1}-${g.s2}`).join(' | '), pointsFor(m, 1), pointsFor(m, 2), names(m['team' + m.winnerTeam]),
+    m.status === 'confirmed' ? 'Confirmed' : m.disputedBy.length ? 'Disputed' : 'Pending Verification', pname(m.loggedBy), names(m.confirmedBy), names(m.disputedBy),
+    Object.entries(m.ratingDeltas).map(([id, d]) => `${pname(id)} ${d >= 0 ? 'up' : 'down'} ${Math.abs(d).toFixed(3)}`).join('; ')]);
+  download(`pickletrack_matches_${todayStamp()}.csv`, '﻿' + [head, ...rows].map(r => r.map(cell).join(',')).join('\r\n'), 'text/csv;charset=utf-8');
+  toast('Match history exported');
+}
+
+/** Replace all data with an imported/restored state, keeping this device's sync settings and theme. */
+function replaceState(data) {
+  const keep = (({ syncUrl, syncSecret, autoSync, theme, remoteUpdatedAt, lastSync, commissioner }) => ({ syncUrl, syncSecret, autoSync, theme, remoteUpdatedAt, lastSync, commissioner, demoCleared: true }))(state.meta);
+  const prevUser = state.activeUserId;
+  const next = normalize(JSON.parse(JSON.stringify(data)));
+  Object.assign(next.meta, keep);
+  if (next.players.some(p => p.id === prevUser)) next.activeUserId = prevUser;
+  state = next; form = null; viewPid = null; openSlot = null; dirty = true;
+  recomputeIfNeeded();
+}
+function importJsonFile(file) {
+  const reader = new FileReader();
+  reader.onerror = () => toast('Could not read that file');
+  reader.onload = async () => {
+    let data;
+    try { data = JSON.parse(reader.result); } catch { return toast('That file is not valid JSON'); }
+    if (!data || !Array.isArray(data.players) || !Array.isArray(data.matches)) return toast('That file is not a PickleTrack backup');
+    const ok = await confirmDialog({ title: 'Replace all current data?',
+      body: `The backup holds ${data.players.length} players and ${data.matches.length} matches. It will replace the ${state.players.length} players and ${state.matches.length} matches on this device. This cannot be undone — export a backup first if unsure.`, ok: 'Replace data', danger: true });
+    if (!ok) return;
+    replaceState(data); save(); render(); toast('Backup imported');
+  };
+  reader.readAsText(file);
+}
+
+/* --- Google Apps Script sync ---
+   POST with a plain-text body is a "simple" request, so the browser sends no CORS preflight
+   (Apps Script web apps cannot answer one). The passcode travels in the body, not the URL. */
+let syncTimer = null, syncBusy = false, syncNote = '';
+function syncStatusText() {
+  if (syncNote) return syncNote;
+  if (!state.meta.syncUrl) return 'Sync is off — add a Web App URL to turn it on.';
+  return state.meta.lastSync ? `Last synced ${fmtDateTime(state.meta.lastSync)}.` : 'Not synced yet.';
+}
+function setSyncNote(t) { syncNote = t; const el = $('#syncStatus'); if (el) el.textContent = syncStatusText(); }
+async function syncCall(action, extra = {}) {
+  const url = state.meta.syncUrl.trim();
+  if (!/^https:\/\/script\.google(usercontent)?\.com\//.test(url)) throw new Error('The Web App URL should start with https://script.google.com/');
+  const res = await fetch(url, { method: 'POST', body: JSON.stringify({ secret: state.meta.syncSecret, action, ...extra }), redirect: 'follow' });
+  if (!res.ok) throw new Error('Server answered ' + res.status);
+  const text = await res.text();
+  try { return JSON.parse(text); } catch { throw new Error('Unexpected reply — check the deployment gives access to "Anyone"'); }
+}
+/** True when this device has nothing the sheet has not already seen. */
+const isClean = () => (!state.players.length && !state.matches.length) || state.meta.updatedAt === state.meta.remoteUpdatedAt;
+/** Swap in the sheet's copy, keeping a half-filled Log Match form when its players still exist. */
+function applyRemote(r) {
+  const f = form;
+  replaceState(r.state);
+  if (f && [...f.t1, ...f.t2].every(x => !x || P(x))) form = f;
+  state.meta.updatedAt = r.updatedAt || state.meta.updatedAt;
+  state.meta.remoteUpdatedAt = r.updatedAt || ''; state.meta.lastSync = new Date().toISOString();
+  persist(); render();
+}
+/** Runs when the app opens, regains focus, and once a minute: picks up matches logged on other devices. */
+async function autoPull() {
+  if (!state.meta.syncUrl || !state.meta.autoSync || syncBusy || modalResolve || document.hidden) return;
+  if (document.activeElement?.matches?.('input,select')) return;      // never yank the screen mid-typing
+  syncBusy = true;
+  try {
+    const r = await syncCall('pull');
+    if (!r.ok) throw new Error(r.error || 'Sync failed');
+    if (!r.state || !r.updatedAt || r.updatedAt === state.meta.remoteUpdatedAt) return;
+    if (isClean()) { applyRemote(r); setSyncNote(''); toast('Updated with changes from other devices'); }
+    else setSyncNote('The sheet was changed from another device. Use Sync Now to choose which copy to keep.');
+  } catch (e) { setSyncNote('Sync failed: ' + e.message); }
+  finally { syncBusy = false; }
+}
+function scheduleSync() {
+  clearTimeout(syncTimer);
+  if (!state.meta.syncUrl || !state.meta.autoSync) return;
+  syncTimer = setTimeout(() => pushSync({ quiet: true }), 2500);
+}
+async function pushSync({ force = false, quiet = false } = {}) {
+  if (!state.meta.syncUrl) { if (!quiet) toast('Add your Web App URL first'); return; }
+  if (syncBusy) { if (quiet) scheduleSync(); return; }
+  syncBusy = true; setSyncNote('Syncing…');
+  try {
+    const sent = state.meta.updatedAt;
+    const r = await syncCall('push', { state: exportable(), baseUpdatedAt: state.meta.remoteUpdatedAt || '', force });
+    if (r.ok) {
+      state.meta.remoteUpdatedAt = r.updatedAt || sent; state.meta.lastSync = new Date().toISOString(); persist();
+      setSyncNote(''); if (!quiet) toast('Synced to Google Sheets');
+    } else if (r.conflict) {
+      setSyncNote('The sheet was changed from another device. Use Sync Now to choose which copy to keep.');
+      if (quiet) toast('Sheet has newer data — open Data & Sync to resolve');
+      else {
+        syncBusy = false;
+        const pick = await openModal(`<h2>The sheet has other changes</h2><p>The Google Sheet was updated${r.updatedAt ? ' on ' + esc(fmtDateTime(r.updatedAt)) : ''} from another device since this one last synced. Which copy should win?</p>
+          <div class="acts"><button class="btn" data-modal="cancel">Cancel</button><button class="btn" data-modal="alt">Use the sheet's data</button><button class="btn danger" data-modal="ok">Overwrite the sheet</button></div>`);
+        if (pick === 'ok') return pushSync({ force: true });
+        if (pick === 'alt') return pullSync(true);
+      }
+    } else throw new Error(r.error || 'Sync failed');
+  } catch (e) {
+    setSyncNote('Sync failed: ' + e.message);
+    if (!quiet) toast('Sync failed — ' + e.message, 4000);
+  } finally { syncBusy = false; }
+}
+async function pullSync(skipConfirm = false) {
+  if (!state.meta.syncUrl) return toast('Add your Web App URL first');
+  if (syncBusy) return;
+  syncBusy = true; setSyncNote('Fetching from sheet…');
+  try {
+    const r = await syncCall('pull');
+    if (!r.ok) throw new Error(r.error || 'Restore failed');
+    if (!r.state || !Array.isArray(r.state.players)) throw new Error('The sheet has no PickleTrack data yet');
+    syncBusy = false; setSyncNote('');
+    if (!skipConfirm && !(await confirmDialog({ title: 'Restore from sheet?', body: `The sheet holds ${r.state.players.length} players and ${(r.state.matches || []).length} matches${r.updatedAt ? ', saved ' + fmtDateTime(r.updatedAt) : ''}. They will replace everything on this device.`, ok: 'Restore', danger: true }))) return;
+    applyRemote(r); toast('Restored from Google Sheets');
+  } catch (e) {
+    setSyncNote('Restore failed: ' + e.message); toast('Restore failed — ' + e.message, 4000);
+  } finally { syncBusy = false; }
+}
+
+/* The Apps Script users paste into script.google.com. Kept free of backticks and
+   dollar-brace sequences so it can live inside this template literal unchanged. */
+const GAS_CODE = String.raw`/**
+ * PickleTrack <-> Google Sheets sync
+ * 1. Change SECRET below to your own passcode.
+ * 2. Deploy > New deployment > Web app. Execute as: Me. Who has access: Anyone.
+ * 3. Paste the Web App URL and the same passcode into PickleTrack.
+ * After editing this script, deploy a NEW VERSION for changes to take effect.
+ */
+const SECRET = 'change-me-to-your-passcode';
+const STATE_SHEET = '_PickleTrackState';   // raw backup, do not edit by hand
+const CHUNK = 45000;                       // a cell holds at most 50,000 characters
+
+function doGet() {
+  return out({ ok: true, app: 'PickleTrack', hint: 'Sync uses POST requests from the app.' });
+}
+
+function doPost(e) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    const req = JSON.parse(e.postData.contents);
+    if (SECRET === 'change-me-to-your-passcode') return out({ ok: false, error: 'Set your own SECRET in the script first' });
+    if (req.secret !== SECRET) return out({ ok: false, error: 'Wrong passcode' });
+    const ss = book();
+    const current = readState(ss);
+    if (req.action === 'pull') {
+      return out({ ok: true, state: current.state, updatedAt: current.updatedAt });
+    }
+    if (req.action === 'push') {
+      if (!req.state || !req.state.players || !req.state.matches) return out({ ok: false, error: 'No state in request' });
+      // Someone else wrote since this device last synced: let the user decide.
+      if (!req.force && current.updatedAt && current.updatedAt !== (req.baseUpdatedAt || '')) {
+        return out({ ok: false, conflict: true, updatedAt: current.updatedAt });
+      }
+      const stamp = (req.state.meta && req.state.meta.updatedAt) || new Date().toISOString();
+      writeState(ss, req.state, stamp);
+      writeReadable(ss, req.state);
+      return out({ ok: true, updatedAt: stamp });
+    }
+    return out({ ok: false, error: 'Unknown action' });
+  } catch (err) {
+    return out({ ok: false, error: String(err && err.message || err) });
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function out(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
+}
+
+/** The bound spreadsheet, or one created on first use for standalone scripts. */
+function book() {
+  let ss = SpreadsheetApp.getActiveSpreadsheet();
+  if (ss) return ss;
+  const props = PropertiesService.getScriptProperties();
+  const id = props.getProperty('SHEET_ID');
+  if (id) return SpreadsheetApp.openById(id);
+  ss = SpreadsheetApp.create('PickleTrack Data');
+  props.setProperty('SHEET_ID', ss.getId());
+  return ss;
+}
+
+function sheet(ss, name) {
+  return ss.getSheetByName(name) || ss.insertSheet(name);
+}
+
+function readState(ss) {
+  const sh = ss.getSheetByName(STATE_SHEET);
+  if (!sh || sh.getLastRow() < 2) return { state: null, updatedAt: '' };
+  const values = sh.getRange(1, 1, sh.getLastRow(), 1).getValues().map(function (r) { return String(r[0]); });
+  try {
+    return { state: JSON.parse(values.slice(1).join('')), updatedAt: values[0] };
+  } catch (err) {
+    return { state: null, updatedAt: '' };
+  }
+}
+
+function writeState(ss, state, stamp) {
+  const sh = sheet(ss, STATE_SHEET);
+  const json = JSON.stringify(state);
+  const rows = [[stamp]];
+  for (let i = 0; i < json.length; i += CHUNK) rows.push([json.substring(i, i + CHUNK)]);
+  sh.clearContents();
+  sh.getRange(1, 1, rows.length, 1).setNumberFormat('@').setValues(rows);
+}
+
+/** Text starting with = + - @ would be run as a formula, so it is stored as plain text. */
+function safe(v) {
+  const s = String(v == null ? '' : v);
+  return /^[=+\-@]/.test(s) ? "'" + s : s;
+}
+
+/** Human-readable Players and Matches tabs, rewritten on every sync. */
+function writeReadable(ss, state) {
+  const names = {};
+  state.players.forEach(function (p) { names[p.id] = p.name; });
+  const team = function (ids) { return (ids || []).map(function (id) { return names[id] || '?'; }).join(' & '); };
+
+  const players = [['Player', 'Guest', 'Doubles Rating', 'Singles Rating', 'Phone', 'Joined']];
+  state.players.forEach(function (p) {
+    players.push([safe(p.name), p.isGuest ? 'Yes' : 'No', Number(p.ratingDoubles).toFixed(3), Number(p.ratingSingles).toFixed(3), safe(p.phone), String(p.createdDate || '').slice(0, 10)]);
+  });
+  fill(sheet(ss, 'Players'), players);
+
+  const matches = [['Date', 'Venue', 'Type', 'Format', 'Team 1', 'Team 2', 'Scores', 'Winner', 'Status', 'Logged By']];
+  state.matches.slice().sort(function (a, b) { return a.date < b.date ? 1 : -1; }).forEach(function (m) {
+    matches.push([String(m.date).replace('T', ' ').slice(0, 16), safe(m.venue), m.type, m.format, safe(team(m.team1)), safe(team(m.team2)),
+      m.games.map(function (g) { return g.s1 + ' to ' + g.s2; }).join(' | '), safe(team(m.winnerTeam === 1 ? m.team1 : m.team2)),
+      m.status === 'confirmed' ? 'Confirmed' : (m.disputedBy && m.disputedBy.length ? 'Disputed' : 'Pending'), safe(names[m.loggedBy] || '')]);
+  });
+  fill(sheet(ss, 'Matches'), matches);
+}
+
+function fill(sh, rows) {
+  sh.clearContents();
+  sh.getRange(1, 1, rows.length, rows[0].length).setNumberFormat('@').setValues(rows);
+  sh.getRange(1, 1, 1, rows[0].length).setFontWeight('bold');
+  sh.setFrozenRows(1);
+}
+`;
+
+/* ---------- 9. Modal / toast / confetti / theme ---------- */
+let modalResolve = null, modalValidate = null;
+function openModal(html, focusSel) {
+  $('#modalCard').innerHTML = html;
+  $('#modal').classList.add('open');
+  ($(focusSel || '[data-modal="cancel"]', $('#modalCard')) || $('#modalCard button'))?.focus();
+  return new Promise(res => { modalResolve = res; });
+}
+function closeModal(value) {
+  if (value === 'ok' && modalValidate && !modalValidate()) return;
+  const res = modalResolve;
+  // Resolve before clearing the card so callers can still read form fields.
+  modalResolve = null; modalValidate = null;
+  if (res) res(value);
+  Promise.resolve().then(() => { if (!modalResolve) { $('#modal').classList.remove('open'); $('#modalCard').innerHTML = ''; } });
+}
+function confirmDialog({ title, body, ok = 'OK', danger = false }) {
+  return openModal(`<h2>${esc(title)}</h2><p>${esc(body)}</p>
+    <div class="acts"><button class="btn" data-modal="cancel">Cancel</button><button class="btn ${danger ? 'danger' : 'primary'}" data-modal="ok">${esc(ok)}</button></div>`)
+    .then(v => v === 'ok');
+}
+
+let toastTimer = null;
+function toast(msg, ms = 2500) {
+  const t = $('#toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), ms);
+}
+
+function confetti() {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const c = $('#confetti'), ctx = c.getContext('2d');
+  c.width = innerWidth; c.height = innerHeight;
+  const colors = ['#16a34a', '#2563eb', '#eab308', '#e11d48', '#ffffff', '#22c55e'];
+  const parts = Array.from({ length: 150 }, () => ({
+    x: Math.random() * c.width, y: -20 - Math.random() * c.height * 0.5, vx: (Math.random() - 0.5) * 4, vy: 2.5 + Math.random() * 4,
+    s: 5 + Math.random() * 7, r: Math.random() * 6.28, vr: (Math.random() - 0.5) * 0.3, c: colors[Math.floor(Math.random() * colors.length)]
+  }));
+  const start = performance.now();
+  (function frame(t) {
+    ctx.clearRect(0, 0, c.width, c.height);
+    if (t - start > 3200) return;
+    ctx.globalAlpha = Math.min(1, (3200 - (t - start)) / 600);
+    for (const p of parts) {
+      p.x += p.vx; p.y += p.vy; p.r += p.vr; p.vy += 0.03;
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.r); ctx.fillStyle = p.c; ctx.fillRect(-p.s / 2, -p.s / 3, p.s, p.s * 0.66); ctx.restore();
+    }
+    requestAnimationFrame(frame);
+  })(start);
+}
+
+const darkQuery = matchMedia('(prefers-color-scheme: dark)');
+function applyTheme() {
+  const t = state.meta.theme, dark = t === 'dark' || (t === 'auto' && darkQuery.matches);
+  document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  $('meta[name="theme-color"]').content = dark ? '#0f172a' : '#16a34a';
+}
+
+/* ---------- 10. Event wiring & boot ---------- */
+let installEvent = null;   // Chrome's deferred "install app" prompt
+const actions = {
+  install: async () => { if (!installEvent) return; installEvent.prompt(); await installEvent.userChoice; installEvent = null; render(); },
+  tab: el => { tab = el.dataset.tab; openSlot = null; history.replaceState(null, '', '#' + tab); render(); scrollTo(0, 0); },
+  theme: () => { state.meta.theme = { auto: 'dark', dark: 'light', light: 'auto' }[state.meta.theme]; persist(); applyTheme(); renderChrome(); toast(`Theme: ${state.meta.theme}`); },
+  'lb-filter': el => { lbMode = el.dataset.f; render(); },
+  'lb-reg': () => { lbRegulars = !lbRegulars; render(); },
+  'view-player': el => { viewPid = el.dataset.id; tab = 'profile'; history.replaceState(null, '', '#profile'); render(); scrollTo(0, 0); },
+  'add-player': async () => { const p = await playerDialog(); if (p) { viewPid = p.id; render(); } },
+  'edit-player': async el => { await playerDialog({ id: el.dataset.id }); render(); },
+  'form-type': el => { form.type = el.dataset.v; openSlot = null; render(); },
+  'slot-open': el => { openSlot = openSlot === el.dataset.slot ? null : el.dataset.slot; render(); },
+  pick: el => { const [t, i] = openSlot.split('-').map(Number); form['t' + t][i] = el.dataset.id; openSlot = null; render(); },
+  'add-guest': async () => {
+    const slot = openSlot, name = $('#pickSearch')?.value.trim() || '';
+    openSlot = null; render();
+    const p = await playerDialog({ guest: true, name });
+    if (p) { const [t, i] = slot.split('-').map(Number); form['t' + t][i] = p.id; }
+    render();
+  },
+  step: el => {
+    const g = form.games[+el.dataset.g], k = 's' + el.dataset.t;
+    g[k] = String(clamp((parseInt(g[k]) || 0) + +el.dataset.d, 0, 99));
+    $(`input[data-score][data-g="${el.dataset.g}"][data-t="${el.dataset.t}"]`).value = g[k];
+    updateScoreStatus();
+  },
+  'log-submit': submitMatch,
+  'form-reset': () => { form = null; openSlot = null; render(); },
+  confirm: el => confirmMatch(el.dataset.id),
+  dispute: el => disputeMatch(el.dataset.id),
+  'del-match': el => deleteMatch(el.dataset.id),
+  'export-json': exportJson,
+  'export-csv': exportCsv,
+  'import-json': () => $('#importFile').click(),
+  'sync-now': () => pushSync(),
+  'sync-restore': () => pullSync(),
+  'copy-script': async () => {
+    try { await navigator.clipboard.writeText(GAS_CODE); toast('Script copied to clipboard'); }
+    catch { toast('Copy blocked — open the code and copy it by hand'); }
+  },
+  'reset-all': async () => {
+    if (!(await confirmDialog({ title: 'Erase all data?', body: 'Every player, match and venue on this device will be removed. Sync settings are kept. This cannot be undone.', ok: 'Erase everything', danger: true }))) return;
+    replaceState(emptyState()); save(); render(); toast('All data erased');
+  }
+};
+
+document.addEventListener('click', e => {
+  const md = e.target.closest('[data-modal]');
+  if (md) return closeModal(md.dataset.modal);
+  if (e.target.id === 'modal') return closeModal('cancel');
+  // Close an open player picker when tapping elsewhere, without re-rendering the form.
+  if (openSlot && !e.target.closest('.slot-wrap')) { openSlot = null; $('.pop')?.remove(); document.querySelectorAll('.slot').forEach(s => s.setAttribute('aria-expanded', 'false')); }
+  const dot = e.target.closest('.dot');
+  if (dot) return showTip(dot);
+  const el = e.target.closest('[data-act]');
+  if (el && actions[el.dataset.act]) actions[el.dataset.act](el);
+});
+
+document.addEventListener('input', e => {
+  const t = e.target;
+  if (t.matches('[data-score]')) {
+    const v = t.value === '' ? '' : String(clamp(parseInt(t.value) || 0, 0, 99));
+    form.games[+t.dataset.g]['s' + t.dataset.t] = v;
+    updateScoreStatus();
+  } else if (t.id === 'pickSearch') $('#pickList').innerHTML = pickListHtml(t.value);
+  else if (t.id === 'f-venue') form.venue = t.value;
+  else if (t.id === 'f-date') form.date = t.value;
+});
+
+document.addEventListener('change', e => {
+  const t = e.target;
+  if (t.id === 'activeUser') { state.activeUserId = t.value || null; viewPid = state.activeUserId; if (form && !form.t1[0] && !form.t2.includes(t.value) && !form.t1.includes(t.value)) form.t1[0] = t.value; persist(); render(); toast(`Now playing as ${pname(state.activeUserId)}`); }
+  else if (t.id === 'f-format') { form.format = t.value; render(); }
+  else if (t.matches('[data-cb]')) form.games[+t.dataset.g].cb = t.checked;
+  else if (t.id === 'profileSel' || t.id === 'badgeSel') { viewPid = t.value; render(); }
+  else if (t.id === 'commToggle') { state.meta.commissioner = t.checked; persist(); render(); toast(t.checked ? 'Commissioner mode on' : 'Commissioner mode off'); }
+  else if (t.id === 'syncUrl') { state.meta.syncUrl = t.value.trim(); state.meta.remoteUpdatedAt = ''; persist(); setSyncNote(''); }
+  else if (t.id === 'syncSecret') { state.meta.syncSecret = t.value; persist(); }
+  else if (t.id === 'autoSync') { state.meta.autoSync = t.checked; persist(); }
+  else if (t.id === 'importFile') { if (t.files[0]) importJsonFile(t.files[0]); t.value = ''; }
+});
+
+/* Sparkline tooltips: hover, keyboard focus or tap. */
+function showTip(dot) {
+  const chart = dot.closest('.chart');
+  chart.querySelector('.tip')?.remove();
+  const tip = document.createElement('div');
+  const x = +dot.dataset.x, y = +dot.dataset.y;
+  tip.className = 'tip' + (x < 40 ? ' l' : x > 60 ? ' rt' : '') + (y < 35 ? ' below' : '');
+  tip.textContent = dot.dataset.tip;
+  tip.style.left = dot.style.left; tip.style.top = dot.style.top;
+  chart.appendChild(tip);
+}
+document.addEventListener('pointerover', e => { const d = e.target.closest?.('.dot'); if (d) showTip(d); });
+document.addEventListener('focusin', e => { if (e.target.matches?.('.dot')) showTip(e.target); });
+document.addEventListener('pointerout', e => { if (e.pointerType === 'mouse' && e.target.closest?.('.dot')) e.target.closest('.chart').querySelector('.tip')?.remove(); });
+
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  if (modalResolve) closeModal('cancel');
+  else if (openSlot) { openSlot = null; render(); }
+});
+darkQuery.addEventListener('change', applyTheme);
+window.addEventListener('hashchange', () => { const h = location.hash.slice(1); if (['board', 'log', 'profile', 'badges', 'data'].includes(h) && h !== tab) { tab = h; render(); } });
+
+/* Boot */
+state = loadState();
+viewPid = state.activeUserId;
+if (['board', 'log', 'profile', 'badges', 'data'].includes(location.hash.slice(1))) tab = location.hash.slice(1);
+applyTheme();
+render();
+persist();
+
+/* App behaviour when hosted (GitHub Pages): offline cache, install prompt, cross-device refresh. */
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvent = e; if (tab === 'data') render(); });
+window.addEventListener('appinstalled', () => { installEvent = null; toast('PickleTrack installed'); if (tab === 'data') render(); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) autoPull(); });
+setInterval(autoPull, 60000);
+autoPull();
+</script>
+</body>
+</html>
