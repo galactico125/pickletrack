@@ -1,7 +1,7 @@
 /* PickleTrack service worker: makes the app open offline once it has been visited.
    Only same-origin GET requests are cached; Google Sheets sync calls always go to the network.
    Bump CACHE when you want every device to drop its old copy immediately. */
-const CACHE = 'pickletrack-v1';
+const CACHE = 'pickletrack-v3';
 const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {

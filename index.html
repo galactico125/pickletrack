@@ -540,7 +540,9 @@ function canAct(m) {
   const u = state.activeUserId;
   return teamOf(m, u) !== 0 && u !== m.loggedBy && !m.confirmedBy.includes(u) && !m.disputedBy.includes(u);
 }
-const canDelete = m => state.meta.commissioner || m.loggedBy === state.activeUserId;
+/** Deleting anything is the organiser's job. A device that is not connected to a shared sheet is its own organiser. */
+const isAdmin = () => !state.meta.syncUrl || !!state.meta.isAdmin;
+const canDelete = () => isAdmin();
 
 /** One match as a card. `persp` = player id whose win/loss colours the left border. */
 function matchCard(m, persp = null) {
@@ -564,7 +566,15 @@ function matchCard(m, persp = null) {
 }
 
 /* ---------- 6. Views ---------- */
+let rendering = false, renderAgain = false;
 function render() {
+  // Replacing the view can blur a field, whose change handler may ask for another render: queue it instead of nesting.
+  if (rendering) { renderAgain = true; return; }
+  rendering = true;
+  try { renderNow(); } finally { rendering = false; }
+  if (renderAgain) { renderAgain = false; render(); }
+}
+function renderNow() {
   recomputeIfNeeded();
   renderChrome();
   renderBanner();
@@ -737,6 +747,7 @@ function renderLog(v) {
         <div class="vs">VS</div>
         <div class="team t2"><h3>Team 2</h3>${Array.from({ length: n }, (_, i) => slotHtml(2, i)).join('')}</div>
       </div>
+      <div class="alert small" id="dupHint" style="margin-top:0" hidden></div>
       <div class="grid2">
         <label class="fld">Venue
           <input type="text" id="f-venue" list="venueList" value="${esc(form.venue)}" placeholder="Pick a saved venue or type a new one" autocomplete="off">
@@ -766,8 +777,31 @@ function renderLog(v) {
       ${recent.length ? `<div class="mlist">${recent.map(m => matchCard(m)).join('')}</div>` : '<p class="muted">No matches logged yet.</p>'}
     </section>
   </div>`;
-  updateScoreStatus();
+  updateScoreStatus(); updateDupHint();
   if (openSlot) $('#pickSearch')?.focus();
+}
+
+/* --- Duplicate protection ---
+   The same game often gets entered twice: both teams log it, or someone re-enters after a sync clash.
+   Three guards: a live "already logged today" list, a check on Save, and a fresh pull before logging. */
+
+/** Matches already logged between exactly these two sides, with scores turned to the form's Team 1 view. */
+function sameLineup(t1, t2, type) {
+  const k = ids => [...ids].sort().join('|'), a = k(t1), b = k(t2);
+  return state.matches.filter(m => m.type === type && ((k(m.team1) === a && k(m.team2) === b) || (k(m.team1) === b && k(m.team2) === a)))
+    .map(m => ({ m, score: scoreStr(m, k(m.team1) === a ? 1 : 2) }));
+}
+const formTeams = () => { const n = form.type === 'singles' ? 1 : 2; return [form.t1.slice(0, n), form.t2.slice(0, n)]; };
+const statusWord = m => (m.status === 'confirmed' ? 'confirmed' : m.disputedBy.length ? 'disputed' : 'awaiting confirmation');
+
+/** Shows what is already logged for these teams on the chosen day, before any score is typed. */
+function updateDupHint() {
+  const box = $('#dupHint'); if (!box) return;
+  const [t1, t2] = formTeams(), day = new Date(form.date).toDateString();
+  const list = [...t1, ...t2].every(Boolean) ? sameLineup(t1, t2, form.type).filter(x => new Date(x.m.date).toDateString() === day) : [];
+  box.hidden = !list.length;
+  box.innerHTML = list.length ? `<b>Already logged for these teams on this day — check before adding another:</b>
+    ${list.map(x => `<div class="num">• ${esc(x.score)} · ${new Date(x.m.date).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })} · ${statusWord(x.m)} · by ${esc(pname(x.m.loggedBy))}</div>`).join('')}` : '';
 }
 
 /** Live validation + Match Winner badge. Runs on every keystroke without re-rendering inputs. */
@@ -911,13 +945,13 @@ function renderData(v) {
     <section class="card stack"><h2>Data portability</h2>
       <p class="small muted">Everything lives in this browser. Export a backup regularly, or turn on Google Sheets sync below.${m.lastBackup ? ` Last backup: ${fmtDateTime(m.lastBackup)}.` : ''}</p>
       <div class="row"><button class="btn primary" data-act="export-json">Export JSON Backup</button>
-        <button class="btn" data-act="import-json">Import JSON Backup</button>
+        <button class="btn" data-act="import-json" ${isAdmin() ? '' : 'disabled title="Organiser only"'}>Import JSON Backup</button>
         <button class="btn" data-act="export-csv">Export Match History to CSV</button></div>
     </section>
     <section class="card stack"><h2>Google Sheets sync</h2>
       <ol class="steps">
         <li>Create a Google Sheet, then open <b>Extensions → Apps Script</b> (or start a project at script.google.com).</li>
-        <li>Paste the script below, and change <code>SECRET</code> to your own passcode.</li>
+        <li>Paste the script below. Change <code>SECRET</code> (shared with players) and <code>ADMIN_SECRET</code> (organiser only, keep it to yourself).</li>
         <li><b>Deploy → New deployment → Web app</b>. Execute as <b>Me</b>, access <b>Anyone</b>. Copy the Web App URL.</li>
         <li>Paste the URL and the same passcode here.</li>
       </ol>
@@ -927,6 +961,11 @@ function renderData(v) {
         <label class="fld">Web App URL<input type="url" id="syncUrl" value="${esc(m.syncUrl)}" placeholder="https://script.google.com/macros/s/…/exec" autocomplete="off"></label>
         <label class="fld">Secret Passcode<input type="password" id="syncSecret" value="${esc(m.syncSecret)}" autocomplete="off"></label>
       </div>
+      <label class="fld">Organiser passcode — only on the organiser's own device, leave empty otherwise
+        <input type="password" id="adminSecret" value="${esc(m.adminSecret || '')}" autocomplete="off"></label>
+      <p class="small">${!m.syncUrl ? '<span class="chip plain">Not shared</span> This device is not connected to a sheet, so nothing is locked.'
+        : m.isAdmin ? '<span class="chip ok">✓ Organiser</span> This device can delete matches, remove players, import backups and erase data.'
+        : '<span class="chip info">Member</span> This device can add players, log, confirm and dispute. Deleting and erasing are locked, and the sheet rejects them.'}</p>
       <label class="check"><input type="checkbox" id="autoSync" ${m.autoSync ? 'checked' : ''}>Auto-sync a few seconds after every change</label>
       <div class="row"><button class="btn blue" data-act="sync-now">Sync Now</button><button class="btn" data-act="sync-restore">Restore from Sheet</button></div>
       <p class="small muted" id="syncStatus">${esc(syncStatusText())}</p>
@@ -938,8 +977,8 @@ function renderData(v) {
     </section>
     <section class="card stack"><h2>Settings</h2>
       <label class="check"><input type="checkbox" id="commToggle" ${m.commissioner ? 'checked' : ''}>
-        <span><b>Commissioner / Honor mode</b> — new matches are confirmed immediately, and this device can confirm, dispute or delete any match</span></label>
-      <div class="row"><button class="btn danger" data-act="reset-all">Erase all data…</button></div>
+        <span><b>Commissioner / Honor mode</b> — new matches are confirmed immediately, and this device can confirm or dispute any match</span></label>
+      <div class="row"><button class="btn danger" data-act="reset-all" ${isAdmin() ? '' : 'disabled'}>Erase all data…</button>${isAdmin() ? '' : '<span class="small muted">Organiser only</span>'}</div>
     </section>
   </div>`;
   $('#gasCode').textContent = GAS_CODE;
@@ -969,7 +1008,7 @@ function withCelebration(change, fallbackToast) {
   else if (fallbackToast) toast(fallbackToast);
 }
 
-function submitMatch() {
+async function submitMatch() {
   const n = form.type === 'singles' ? 1 : 2;
   const t1 = form.t1.slice(0, n), t2 = form.t2.slice(0, n), all = [...t1, ...t2];
   if (!state.activeUserId) return toast('Add a player first');
@@ -979,6 +1018,22 @@ function submitMatch() {
   if (!r.ok) return toast(r.msg || 'Check the scores');
   const date = new Date(form.date);
   if (isNaN(date)) return toast('Pick a valid date and time');
+  // Duplicate guard: same teams and same score within 12 hours, or any entry for these teams in the last 20 minutes.
+  const mine = r.games.map(g => `${g.s1}–${g.s2}`).join(', ');
+  const near = sameLineup(t1, t2, form.type).map(x => ({ ...x, gap: Math.abs(new Date(x.m.date) - date) }));
+  const exact = near.find(x => x.score === mine && x.gap < 12 * 36e5);
+  const clash = !exact && near.find(x => x.gap < 20 * 6e4);
+  const hit = exact || clash;
+  if (hit) {
+    const m = hit.m, when = fmtDateTime(m.date), who = esc(pname(m.loggedBy));
+    const pick = await openModal(`<h2>${exact ? 'This match looks already logged' : 'These teams were just logged'}</h2>
+      <p>${exact ? `${who} already entered <b class="num">${esc(hit.score)}</b> for these same teams (${esc(when)}, ${statusWord(m)}). Saving again would count the game twice.`
+        : `${who} entered <b class="num">${esc(hit.score)}</b> for these same teams at ${esc(when)} (${statusWord(m)}), and you are entering <b class="num">${esc(mine)}</b>. If it is the same game, confirm or dispute that entry instead of adding a second one.`}</p>
+      <div class="acts"><button class="btn" data-modal="alt">It's a different game — save</button>
+        ${canAct(m) ? '<button class="btn" data-modal="cancel">Don\'t save</button><button class="btn primary" data-modal="ok">Confirm the existing one</button>' : '<button class="btn primary" data-modal="cancel">Don\'t save</button>'}</div>`);
+    if (pick === 'ok') { freshForm(true); return confirmMatch(m.id); }
+    if (pick !== 'alt') return;
+  }
   const venue = form.venue.trim();
   const comm = state.meta.commissioner;
   const match = {
@@ -1011,7 +1066,7 @@ function confirmMatch(id) {
 async function disputeMatch(id) {
   const m = M(id), u = state.activeUserId;
   if (!m || !canAct(m)) return;
-  const ok = await confirmDialog({ title: 'Dispute this score?', body: `${scoreStr(m)} — the match stays unrated until the dispute is settled. The logger can delete and re-enter it.`, ok: 'Dispute', danger: true });
+  const ok = await confirmDialog({ title: 'Dispute this score?', body: `${scoreStr(m)} — the match stays unrated until the dispute is settled. The organiser can delete it so it can be entered again.`, ok: 'Dispute', danger: true });
   if (!ok) return;
   if (!m.disputedBy.includes(u)) m.disputedBy.push(u);
   m.confirmedBy = m.confirmedBy.filter(x => x !== u || x === m.loggedBy);
@@ -1044,7 +1099,7 @@ function playerDialog({ id = null, guest = false, name = '' } = {}) {
       <select id="pInit" ${hasMatches ? 'disabled' : ''}>${[3, 3.5].concat(p && ![3, 3.5].includes(p.initialRating) ? [p.initialRating] : []).map(r => `<option value="${r}"${(p?.initialRating ?? 3) === r ? ' selected' : ''}>${fmtR(r)}${r === 3 ? ' — default provisional' : r === 3.5 ? ' — experienced' : ''}</option>`).join('')}</select></label>
     ${hasMatches ? '<p class="small muted">Starting rating is locked once a player has matches.</p>' : ''}
     <label class="check"><input type="checkbox" id="pGuest" ${(p ? p.isGuest : guest) ? 'checked' : ''}>Guest player (occasional visitor)</label>
-    <div class="acts">${p && !hasMatches ? '<button class="btn danger" data-modal="alt" style="margin-right:auto">Remove</button>' : ''}
+    <div class="acts">${p && !hasMatches && isAdmin() ? '<button class="btn danger" data-modal="alt" style="margin-right:auto">Remove</button>' : ''}
       <button class="btn" data-modal="cancel">Cancel</button><button class="btn primary" data-modal="ok">Save</button></div>`, '#pName')
   .then(res => {
     if (res === 'alt' && p) {
@@ -1075,7 +1130,7 @@ function playerDialog({ id = null, guest = false, name = '' } = {}) {
 /** State as shared outside this browser: no sync URL or passcode. */
 function exportable() {
   const copy = JSON.parse(JSON.stringify(state));
-  delete copy.meta.syncUrl; delete copy.meta.syncSecret; delete copy.meta.remoteUpdatedAt; delete copy.meta.lastSync;
+  delete copy.meta.syncUrl; delete copy.meta.syncSecret; delete copy.meta.adminSecret; delete copy.meta.isAdmin; delete copy.meta.remoteUpdatedAt; delete copy.meta.lastSync;
   return copy;
 }
 function download(name, text, mime) {
@@ -1104,7 +1159,7 @@ function exportCsv() {
 
 /** Replace all data with an imported/restored state, keeping this device's sync settings and theme. */
 function replaceState(data) {
-  const keep = (({ syncUrl, syncSecret, autoSync, theme, remoteUpdatedAt, lastSync, commissioner }) => ({ syncUrl, syncSecret, autoSync, theme, remoteUpdatedAt, lastSync, commissioner, demoCleared: true }))(state.meta);
+  const keep = (({ syncUrl, syncSecret, adminSecret, isAdmin, autoSync, theme, remoteUpdatedAt, lastSync, commissioner }) => ({ syncUrl, syncSecret, adminSecret: adminSecret || '', isAdmin: !!isAdmin, autoSync, theme, remoteUpdatedAt, lastSync, commissioner, demoCleared: true }))(state.meta);
   const prevUser = state.activeUserId;
   const next = normalize(JSON.parse(JSON.stringify(data)));
   Object.assign(next.meta, keep);
@@ -1140,7 +1195,7 @@ function setSyncNote(t) { syncNote = t; const el = $('#syncStatus'); if (el) el.
 async function syncCall(action, extra = {}) {
   const url = state.meta.syncUrl.trim();
   if (!/^https:\/\/script\.google(usercontent)?\.com\//.test(url)) throw new Error('The Web App URL should start with https://script.google.com/');
-  const res = await fetch(url, { method: 'POST', body: JSON.stringify({ secret: state.meta.syncSecret, action, ...extra }), redirect: 'follow' });
+  const res = await fetch(url, { method: 'POST', body: JSON.stringify({ secret: state.meta.syncSecret, admin: state.meta.adminSecret || '', action, ...extra }), redirect: 'follow' });
   if (!res.ok) throw new Error('Server answered ' + res.status);
   const text = await res.text();
   try { return JSON.parse(text); } catch { throw new Error('Unexpected reply — check the deployment gives access to "Anyone"'); }
@@ -1170,6 +1225,17 @@ async function autoPull() {
   } catch (e) { setSyncNote('Sync failed: ' + e.message); }
   finally { syncBusy = false; }
 }
+/** Ask the sheet whether the organiser passcode typed on this device is the right one. */
+async function verifyAdmin() {
+  const m = state.meta;
+  if (!m.syncUrl || !m.adminSecret) { m.isAdmin = false; persist(); render(); return; }
+  try {
+    const r = await syncCall('check');
+    if (!r.ok) throw new Error(/unknown action/i.test(r.error || '') ? 'update the Apps Script to the new version first' : (r.error || 'check failed'));
+    m.isAdmin = !!r.admin; persist(); render();
+    toast(m.isAdmin ? 'Organiser access unlocked on this device' : 'That organiser passcode is not correct');
+  } catch (e) { m.isAdmin = false; persist(); render(); toast('Could not check — ' + e.message, 4000); }
+}
 function scheduleSync() {
   clearTimeout(syncTimer);
   if (!state.meta.syncUrl || !state.meta.autoSync) return;
@@ -1185,13 +1251,18 @@ async function pushSync({ force = false, quiet = false } = {}) {
     if (r.ok) {
       state.meta.remoteUpdatedAt = r.updatedAt || sent; state.meta.lastSync = new Date().toISOString(); persist();
       setSyncNote(''); if (!quiet) toast('Synced to Google Sheets');
+    } else if (r.adminOnly) {
+      // The sheet refused because this copy is missing or has altered something only the organiser may touch.
+      setSyncNote(`The sheet refused this device's copy: ${r.error} Tap "Restore from Sheet" to get back in step.`);
+      toast('Sync refused — ' + r.error, 4500);
     } else if (r.conflict) {
       setSyncNote('The sheet was changed from another device. Use Sync Now to choose which copy to keep.');
       if (quiet) toast('Sheet has newer data — open Data & Sync to resolve');
       else {
         syncBusy = false;
         const pick = await openModal(`<h2>The sheet has other changes</h2><p>The Google Sheet was updated${r.updatedAt ? ' on ' + esc(fmtDateTime(r.updatedAt)) : ''} from another device since this one last synced. Which copy should win?</p>
-          <div class="acts"><button class="btn" data-modal="cancel">Cancel</button><button class="btn" data-modal="alt">Use the sheet's data</button><button class="btn danger" data-modal="ok">Overwrite the sheet</button></div>`);
+          <div class="acts"><button class="btn" data-modal="cancel">Cancel</button><button class="btn ${isAdmin() ? '' : 'primary'}" data-modal="alt">Use the sheet's data</button>${isAdmin() ? '<button class="btn danger" data-modal="ok">Overwrite the sheet</button>' : ''}</div>
+          ${isAdmin() ? '' : '<p class="small muted">Only the organiser can overwrite the sheet. Anything you entered since your last sync will need entering again.</p>'}`);
         if (pick === 'ok') return pushSync({ force: true });
         if (pick === 'alt') return pullSync(true);
       }
@@ -1221,12 +1292,13 @@ async function pullSync(skipConfirm = false) {
    dollar-brace sequences so it can live inside this template literal unchanged. */
 const GAS_CODE = String.raw`/**
  * PickleTrack <-> Google Sheets sync
- * 1. Change SECRET below to your own passcode.
+ * 1. Change SECRET (shared with players) and ADMIN_SECRET (keep to yourself) below.
  * 2. Deploy > New deployment > Web app. Execute as: Me. Who has access: Anyone.
  * 3. Paste the Web App URL and the same passcode into PickleTrack.
  * After editing this script, deploy a NEW VERSION for changes to take effect.
  */
-const SECRET = 'change-me-to-your-passcode';
+const SECRET = 'change-me-to-your-passcode';             // everyone in the club
+const ADMIN_SECRET = 'change-me-to-your-admin-passcode'; // organiser only: needed to delete or erase
 const STATE_SHEET = '_PickleTrackState';   // raw backup, do not edit by hand
 const CHUNK = 45000;                       // a cell holds at most 50,000 characters
 
@@ -1241,6 +1313,8 @@ function doPost(e) {
     const req = JSON.parse(e.postData.contents);
     if (SECRET === 'change-me-to-your-passcode') return out({ ok: false, error: 'Set your own SECRET in the script first' });
     if (req.secret !== SECRET) return out({ ok: false, error: 'Wrong passcode' });
+    const isAdmin = ADMIN_SECRET !== 'change-me-to-your-admin-passcode' && req.admin === ADMIN_SECRET;
+    if (req.action === 'check') return out({ ok: true, admin: isAdmin });
     const ss = book();
     const current = readState(ss);
     if (req.action === 'pull') {
@@ -1251,6 +1325,11 @@ function doPost(e) {
       // Someone else wrote since this device last synced: let the user decide.
       if (!req.force && current.updatedAt && current.updatedAt !== (req.baseUpdatedAt || '')) {
         return out({ ok: false, conflict: true, updatedAt: current.updatedAt });
+      }
+      // Members may add and confirm. Removing or rewriting what is already saved needs the admin passcode.
+      if (!isAdmin && current.state) {
+        const problem = protect(current.state, req.state);
+        if (problem) return out({ ok: false, adminOnly: true, error: problem });
       }
       const stamp = (req.state.meta && req.state.meta.updatedAt) || new Date().toISOString();
       writeState(ss, req.state, stamp);
@@ -1263,6 +1342,27 @@ function doPost(e) {
   } finally {
     lock.releaseLock();
   }
+}
+
+/** Returns a message when a non-admin copy drops or rewrites saved data, otherwise ''. */
+function protect(saved, incoming) {
+  const players = {}, matches = {};
+  incoming.players.forEach(function (p) { players[p.id] = true; });
+  incoming.matches.forEach(function (m) { matches[m.id] = m; });
+  const sig = function (m) {
+    return [m.type, m.format, (m.team1 || []).join('+'), (m.team2 || []).join('+'),
+      (m.games || []).map(function (g) { return g.s1 + '-' + g.s2; }).join(','), m.winnerTeam].join('|');
+  };
+  for (let i = 0; i < saved.players.length; i++) {
+    if (!players[saved.players[i].id]) return 'Only the organiser can remove players.';
+  }
+  for (let j = 0; j < saved.matches.length; j++) {
+    const before = saved.matches[j], after = matches[before.id];
+    if (!after) return 'Only the organiser can delete matches.';
+    if (sig(after) !== sig(before)) return 'Only the organiser can change a saved score or line-up.';
+    if (before.status === 'confirmed' && after.status !== 'confirmed') return 'Only the organiser can un-confirm a match.';
+  }
+  return '';
 }
 
 function out(obj) {
@@ -1403,7 +1503,7 @@ function applyTheme() {
 let installEvent = null;   // Chrome's deferred "install app" prompt
 const actions = {
   install: async () => { if (!installEvent) return; installEvent.prompt(); await installEvent.userChoice; installEvent = null; render(); },
-  tab: el => { tab = el.dataset.tab; openSlot = null; history.replaceState(null, '', '#' + tab); render(); scrollTo(0, 0); },
+  tab: el => { tab = el.dataset.tab; openSlot = null; history.replaceState(null, '', '#' + tab); render(); scrollTo(0, 0); if (tab === 'log') autoPull(); },
   theme: () => { state.meta.theme = { auto: 'dark', dark: 'light', light: 'auto' }[state.meta.theme]; persist(); applyTheme(); renderChrome(); toast(`Theme: ${state.meta.theme}`); },
   'lb-filter': el => { lbMode = el.dataset.f; render(); },
   'lb-reg': () => { lbRegulars = !lbRegulars; render(); },
@@ -1433,7 +1533,7 @@ const actions = {
   'del-match': el => deleteMatch(el.dataset.id),
   'export-json': exportJson,
   'export-csv': exportCsv,
-  'import-json': () => $('#importFile').click(),
+  'import-json': () => (isAdmin() ? $('#importFile').click() : toast('Only the organiser can import a backup')),
   'sync-now': () => pushSync(),
   'sync-restore': () => pullSync(),
   'copy-script': async () => {
@@ -1441,6 +1541,7 @@ const actions = {
     catch { toast('Copy blocked — open the code and copy it by hand'); }
   },
   'reset-all': async () => {
+    if (!isAdmin()) return toast('Only the organiser can erase data');
     if (!(await confirmDialog({ title: 'Erase all data?', body: 'Every player, match and venue on this device will be removed. Sync settings are kept. This cannot be undone.', ok: 'Erase everything', danger: true }))) return;
     replaceState(emptyState()); save(); render(); toast('All data erased');
   }
@@ -1466,7 +1567,7 @@ document.addEventListener('input', e => {
     updateScoreStatus();
   } else if (t.id === 'pickSearch') $('#pickList').innerHTML = pickListHtml(t.value);
   else if (t.id === 'f-venue') form.venue = t.value;
-  else if (t.id === 'f-date') form.date = t.value;
+  else if (t.id === 'f-date') { form.date = t.value; updateDupHint(); }
 });
 
 document.addEventListener('change', e => {
@@ -1476,8 +1577,9 @@ document.addEventListener('change', e => {
   else if (t.matches('[data-cb]')) form.games[+t.dataset.g].cb = t.checked;
   else if (t.id === 'profileSel' || t.id === 'badgeSel') { viewPid = t.value; render(); }
   else if (t.id === 'commToggle') { state.meta.commissioner = t.checked; persist(); render(); toast(t.checked ? 'Commissioner mode on' : 'Commissioner mode off'); }
-  else if (t.id === 'syncUrl') { state.meta.syncUrl = t.value.trim(); state.meta.remoteUpdatedAt = ''; persist(); setSyncNote(''); }
-  else if (t.id === 'syncSecret') { state.meta.syncSecret = t.value; persist(); }
+  else if (t.id === 'syncUrl') { state.meta.syncUrl = t.value.trim(); state.meta.remoteUpdatedAt = ''; state.meta.isAdmin = false; persist(); setSyncNote(''); verifyAdmin(); }
+  else if (t.id === 'syncSecret') { state.meta.syncSecret = t.value; persist(); if (state.meta.adminSecret) verifyAdmin(); }
+  else if (t.id === 'adminSecret') { state.meta.adminSecret = t.value; persist(); verifyAdmin(); }
   else if (t.id === 'autoSync') { state.meta.autoSync = t.checked; persist(); }
   else if (t.id === 'importFile') { if (t.files[0]) importJsonFile(t.files[0]); t.value = ''; }
 });
